@@ -54,11 +54,11 @@ def build_caption_table(df: pd.DataFrame, split: str, vocab: Vocabulary) -> Capt
     groups = rows.groupby("image_id", sort=True)
     image_ids, feat_idx, caps, lens, refs = [], [], [], [], []
     for image_id, g in groups:
-        encoded = [vocab.encode(tokenize(str(c))) for c in g["caption_clean"]]
+        tokens = [vocab.prepare_tokens(tokenize(str(c))) for c in g["caption_clean"]]
         image_ids.append(str(image_id))
         feat_idx.append(int(g["img_feature_idx"].iloc[0]))
-        caps.append(encoded)
-        lens.append([min(len(tokenize(str(c))) + 2, vocab.max_len) for c in g["caption_clean"]])
+        caps.append([vocab.encode(t) for t in tokens])
+        lens.append([min(len(t) + 2, vocab.max_len) for t in tokens])
         refs.append(tuple(str(c) for c in g["caption_raw"]))
     return CaptionTable(
         image_ids=tuple(image_ids),

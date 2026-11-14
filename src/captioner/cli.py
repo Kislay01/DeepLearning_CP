@@ -73,7 +73,7 @@ def prepare(config: ConfigOpt = DEFAULT_CONFIG) -> None:
     out = prepare_data(cfg)
     console.print(
         f"[green]Manifest[/] {len(out.manifest)} rows → {cfg.paths.manifest_path}\n"
-        f"[green]Vocab[/] {out.vocab.n_words} words + 4 specials → {cfg.paths.vocab_path}"
+        f"[green]Vocab[/] {out.vocab.n_words} words + 4 specials → {cfg.vocab_file}"
     )
 
 

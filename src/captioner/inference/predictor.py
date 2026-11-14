@@ -15,6 +15,7 @@ import torch
 from torch import nn
 
 from captioner.config import Config
+from captioner.data.neutral import neutralize_aligned
 from captioner.data.text import detokenize
 from captioner.data.transforms import ImageSource, load_image
 from captioner.data.vocab import Vocabulary
@@ -101,6 +102,8 @@ class Predictor:
         model: CaptionModel = self.decoder  # type: ignore[assignment]
         (hyp,) = decode(model, feats, beam, self.cfg.decode.max_len, self.cfg.decode.length_alpha)
         words = self.vocab.decode(hyp.ids)
+        if self.cfg.decode.gender_neutral_output:
+            words = neutralize_aligned(words)
         side = round(self.cfg.model.num_regions**0.5)
         attention = (
             np.stack([attention_grid(a, side) for a in hyp.attention])

@@ -27,8 +27,10 @@ from captioner.data.dataset import (
     open_feature_store,
 )
 from captioner.data.download import raw_layout
+from captioner.data.neutral import neutralize_aligned, neutralize_text
 from captioner.data.prepare import load_prepared
-from captioner.data.text import detokenize
+from captioner.data.text import clean_caption, detokenize, tokenize
+from captioner.evaluation.fairness import gender_metrics
 from captioner.evaluation.metrics import METRIC_KEYS, CocoResult, coco_scores
 from captioner.evaluation.report import write_samples_html
 from captioner.evaluation.taxonomy import diversity, taxonomy_counts
@@ -65,8 +67,15 @@ def _model_and_data(
     return run.model, ImageFeatureDataset(table, open_feature_store(path, table))
 
 
-def _texts(hyps: list[Hypothesis], run: LoadedRun) -> list[str]:
-    return [" ".join(run.vocab.decode(h.ids)) for h in hyps]
+def _words(hyps: list[Hypothesis], run: LoadedRun) -> tuple[list[list[str]], list[str]]:
+    """Raw decoded words (what the model learned) and the served text (after ADR-021 rewrite)."""
+    raw = [run.vocab.decode(h.ids) for h in hyps]
+    served = [neutralize_aligned(w) if run.cfg.decode.gender_neutral_output else w for w in raw]
+    return raw, [" ".join(w) for w in served]
+
+
+def _neutral_refs(refs: list[list[str]]) -> list[list[str]]:
+    return [[neutralize_text(" ".join(tokenize(clean_caption(r)))) for r in rs] for rs in refs]
 
 
 def _rows(
@@ -122,6 +131,10 @@ def evaluate_run(
     model = model.to(device).eval()
     loader = DataLoader(ds, batch_size=cfg.train.batch_size, collate_fn=collate_images)
     refs = [list(r) for r in table.references]
+    neutral_eval = (
+        run.vocab.text_transform == "gender_neutral" or run.cfg.decode.gender_neutral_output
+    )
+    score_refs = _neutral_refs(refs) if neutral_eval else refs
     report_dir = cfg.paths.reports_dir / run_dir.name
     results: dict[str, Any] = {}
     rows: list[dict[str, Any]] = []
@@ -130,13 +143,17 @@ def evaluate_run(
     for beam in beams:
         dec = beam_decoder(beam, run.cfg.decode.max_len, run.cfg.decode.length_alpha)
         hyps = decode_split(model, loader, device, dec)
-        texts = _texts(hyps, run)
-        res = coco_scores(texts, refs)
+        raw_words, texts = _words(hyps, run)
+        res = coco_scores(texts, score_refs)
+        raw_ref_scores = coco_scores(texts, refs).corpus if neutral_eval else res.corpus
         n_tax = min(cfg.eval.n_taxonomy, len(texts))
         results[f"beam_{beam}"] = {
             **res.corpus,
+            "raw_references": raw_ref_scores,
+            "fairness_model": gender_metrics(raw_words, refs),
+            "fairness_served": gender_metrics([t.split() for t in texts], refs),
             "diversity": diversity(texts),
-            "failure_taxonomy": taxonomy_counts(texts[:n_tax], refs[:n_tax]),
+            "failure_taxonomy": taxonomy_counts(texts[:n_tax], score_refs[:n_tax]),
             "failure_taxonomy_n_images": n_tax,
         }
         rows += _rows(table, split, beam, texts, res)
@@ -153,6 +170,8 @@ def evaluate_run(
         "java_available": bool(main and main[2].java),
         "tokenizer": main[2].tokenizer if main else None,
         "metric_keys": list(METRIC_KEYS),
+        "references": "gender_neutral" if neutral_eval else "raw",
+        "text_transform": run.vocab.text_transform,
         "results": results,
         "failure_taxonomy_method": "keyword heuristics (captioner.evaluation.taxonomy)",
         "created_at": datetime.now(UTC).isoformat(),

@@ -41,10 +41,6 @@ class PathsConfig(_Strict):
         return self.processed_dir / "manifest.parquet"
 
     @property
-    def vocab_path(self) -> Path:
-        return self.artifacts_dir / "vocab.json"
-
-    @property
     def runs_dir(self) -> Path:
         return self.artifacts_dir / "runs"
 
@@ -68,6 +64,15 @@ class DatasetConfig(_Strict):
 class VocabConfig(_Strict):
     min_freq: int = Field(5, ge=1)
     max_len: int = Field(25, ge=3)
+    gender_neutral: bool = False  # ADR-021: train on gender-neutral captions
+
+    @property
+    def variant(self) -> str:
+        """Suffix that keeps vocabularies of different text pipelines apart."""
+        parts = [] if self.min_freq == 5 else [f"mf{self.min_freq}"]
+        if self.gender_neutral:
+            parts.append("neutral")
+        return "_".join(parts)
 
 
 class EncoderConfig(_Strict):
@@ -114,6 +119,7 @@ class DecodeConfig(_Strict):
     beam: int = Field(3, ge=1)
     length_alpha: float = Field(0.7, ge=0.0)
     max_len: int = Field(25, ge=2)
+    gender_neutral_output: bool = True  # ADR-021: rewrite gendered words in served captions
 
 
 class EvalConfig(_Strict):
@@ -164,6 +170,12 @@ class Config(_Strict):
     eval: EvalConfig = Field(default_factory=EvalConfig)
     app: AppConfig = Field(default_factory=AppConfig)
     tts: TTSConfig = Field(default_factory=TTSConfig)
+
+    @property
+    def vocab_file(self) -> Path:
+        """``artifacts/vocab.json`` (or ``vocab_<variant>.json`` for non-default pipelines)."""
+        variant = self.vocab.variant
+        return self.paths.artifacts_dir / (f"vocab_{variant}.json" if variant else "vocab.json")
 
     def with_overrides(self, overrides: dict[str, Any]) -> Config:
         """Return a copy with a nested ``overrides`` dict deep-merged in."""
