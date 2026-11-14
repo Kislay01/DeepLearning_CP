@@ -99,3 +99,15 @@ Format: context → decision → consequence. Numbered in the order they were ta
 - **Context:** `testing.md` §2 requires that decoding never emits `<pad>`/`<start>`. An `<unk>` in a spoken caption is meaningless to a listener.
 - **Decision:** `<pad>`, `<start>` and `<unk>` log-probs are set to −∞ at every step. `decode.max_len` (25) caps generated tokens including `<end>` (code_style.md §6). Length normalisation is `logprob / n^α` with `n` = generated tokens incl. `<end>`, α = 0.7.
 - **Consequence:** captions consist of real words only. Training targets still contain `<unk>`, so the model learns its probability mass; it's just never selected.
+
+## ADR-017 — Offline speech (pyttsx3) renders through a private temp file
+
+- **Context:** `security.md` §2.6 says uploads are never written to disk, and the reference wrote a shared `description.mp3` (D9). `pyttsx3` can only synthesise to a file path.
+- **Decision:** gTTS (default) stays fully in memory. The optional offline engine writes to a `tempfile.TemporaryDirectory()` that is unique per request and deleted before the function returns; only caption text is involved, never the image. `pyttsx3` is an optional extra (`uv sync --extra offline-tts`) and the "Offline voice" option only appears when it is installed.
+- **Consequence:** no shared paths and no cross-user leakage. Audio still plays in the user's browser via `st.audio`.
+
+## ADR-018 — Serving logic lives in `captioner.inference.service`
+
+- **Context:** `code_style.md` §9 keeps ML out of `app/streamlit_app.py`. The app also needs model discovery, a 10 s inference budget (security.md §2.7) and heat-map construction.
+- **Decision:** `service.py` provides `resolve_model_source` (env `CAPTIONER_RELEASE_DIR` → `CAPTIONER_RUN_DIR` → `artifacts/release/<version>` → latest run), `load_predictor` (wrapped in `st.cache_resource` by the app), `caption_with_timeout` (thread pool + `future.result(timeout)`), and `build_heatmaps`.
+- **Consequence:** the app is layout plus callbacks. Serving behaviour is unit-tested without Streamlit.

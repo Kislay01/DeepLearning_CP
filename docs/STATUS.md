@@ -1,6 +1,6 @@
 # Status
 
-Last updated: M5 (decoding & evaluation).
+Last updated: M6 (app & TTS).
 
 | Milestone | Branch | State | Notes |
 |---|---|---|---|
@@ -10,7 +10,7 @@ Last updated: M5 (decoding & evaluation).
 | M3 Models | `feat/models` | done | M1 merge (2.42 M params) and M2 soft attention (12.18 M params, ADR-011), shared `step()` interface, loss with masked attention regulariser (ADR-010) |
 | M4 Training | `feat/training` | done (code + tests) | Loop verified on mini data (CPU): overfit-one-batch, determinism, checkpoint round-trip, CLI smoke, fine-tune stage. **Full-data training not run here** (no GPU, no pretrained features, ADR-009). |
 | M5 Decoding & evaluation | `feat/eval` | done (code + tests) | Batched beam search + length norm, pycocoevalcap wrapper (matches golden), metrics.json / predictions.csv / samples.html, CLI download/prepare/extract/train/evaluate/predict/export, Colab notebook. **Test-set metrics: not yet run** (see reports/README.md). |
-| M6 App & TTS | `feat/app` | not started | |
+| M6 App & TTS | `feat/app` | done (code + tests) | Streamlit UI per design_system.md, tokens in `.streamlit/config.toml`, validated uploads, cached predictor (D10), in-memory gTTS audio with autoplay off (D9), heat-maps + text summary, AppTest suite with TTS mocked, CPU latency p95 ≈ 0.11 s (full-size M2 + ResNet-50, random weights, 2-core sandbox). Manual a11y checks: see M7 checklist. |
 | M7 Hardening & release | `feat/release` | not started | |
 
 ## Environment limits (build sandbox)

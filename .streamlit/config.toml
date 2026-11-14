@@ -1,0 +1,35 @@
+# Design tokens from docs/design_system.md §2 and hardening from docs/security.md §2/§6.
+
+[server]
+maxUploadSize = 10            # MB — also enforced in captioner.inference.validation
+enableXsrfProtection = true
+fileWatcherType = "none"
+
+[client]
+showErrorDetails = "none"     # never show stack traces to users
+toolbarMode = "minimal"
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+font = "sans-serif"
+baseRadius = "12px"
+
+[theme.light]
+primaryColor = "#1D4ED8"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F1F5F9"
+textColor = "#0F172A"
+greenColor = "#15803D"
+orangeColor = "#B45309"
+redColor = "#B91C1C"
+
+[theme.dark]
+primaryColor = "#60A5FA"
+backgroundColor = "#0B1220"
+secondaryBackgroundColor = "#1E293B"
+textColor = "#F1F5F9"
+greenColor = "#4ADE80"
+orangeColor = "#FBBF24"
+redColor = "#F87171"
