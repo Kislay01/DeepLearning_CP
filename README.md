@@ -1,50 +1,60 @@
 # captioner — Image Caption Generator with Speech Output
 
-Upload a photo, get one English sentence that describes it, and hear it read aloud in your browser.
-A frozen **ResNet-50** encoder feeds an **LSTM decoder with soft attention** ("Show, Attend and Tell"),
-trained on **Flickr8k**. A merge-LSTM baseline (a bug-fixed version of the original tutorial model)
-is included for comparison. The demo is a keyboard- and screen-reader-friendly Streamlit app.
+Upload a photo, get one English sentence that describes it, and hear it read aloud — privately,
+on the server, with no third-party service. A frozen image encoder (**CLIP ViT-B/32** or
+**ResNet-50**) feeds an **LSTM decoder with soft attention** ("Show, Attend and Tell"). It trains
+on **MS-COCO** for broad coverage, or on **Flickr8k** for the course benchmark. The demo is a
+keyboard- and screen-reader-friendly Streamlit app that tells you when it is unsure.
 
 [![CI](https://github.com/Kislay01/DeepLearning_CP/actions/workflows/ci.yml/badge.svg)](https://github.com/Kislay01/DeepLearning_CP/actions/workflows/ci.yml)
 
 > **Status:** code, tests, CI and Docker image are complete. **No model has been trained in this
-> repository yet** (it was built without a GPU and without access to the ImageNet weights), so the
-> results table below says *not yet run*. One command trains and evaluates it — see
+> repository yet** (it was built without a GPU and without access to pretrained encoder weights),
+> so the results tables say *not yet run*. One notebook trains and evaluates it — see
 > [Train and evaluate](#train-and-evaluate). Details in [`docs/STATUS.md`](docs/STATUS.md).
+
+## How the original limitations are addressed
+
+| Limitation | What the project does now | Where |
+|---|---|---|
+| Narrow training data (Flickr8k: mostly people and dogs) misses everything else | Train on **MS-COCO 2014** (123k images, 80 object categories) or COCO + Flickr30k + Flickr8k through one Karpathy-split adapter; the recommended model uses **CLIP** features pre-trained on web-scale image–text data | ADR-023, ADR-024 · `configs/coco_clip.yaml` |
+| Captions guess gender or age from appearance | Gender-neutral training targets (`man/woman → person`, `boy/girl → child`, `his/her → their`, …); every served caption is rewritten neutrally whatever the model; evaluation **measures** the model's gender word, error and guess rates | ADR-021 |
+| Hallucinated objects and repetitive loops | Decoding blocks repeated trigrams and repeated content words; the taxonomy and `repeated_word_rate` track what remains | ADR-022 |
+| Unfamiliar photos still get confident-sounding captions | A calibrated **out-of-domain detector** (k-means over training features, 99th-percentile threshold on validation) and a calibrated confidence threshold ship with each model; the UI warns, and the *spoken* caption is hedged ("Possibly: …"); evaluation checks that flagged captions really score lower | ADR-022 |
+| Speech went to Google's unofficial gTTS endpoint | **Local neural TTS (Piper)** by default — pinned, SHA-256-verified voice, runs in-process, works with no network (proved in CI with `--network none`); gTTS is opt-in only and labelled | ADR-020 |
+
+The original reference defects D1–D12 (no evaluation, "a" deleted, pickles, server-side audio, …)
+are fixed too. Each has a named regression test; see [`docs/TRACEABILITY.md`](docs/TRACEABILITY.md).
 
 ## Architecture
 
 ```mermaid
 flowchart LR
     subgraph Offline pipeline
-        A[Flickr8k zips<br/>MD5-verified] --> B[manifest.parquet<br/>validated, orphan dropped]
-        B --> C[vocab.json<br/>train only, min_freq 5]
-        A --> D[ResNet-50 frozen<br/>IMAGENET1K_V2]
-        D --> E[(HDF5 features<br/>pooled 2048 · spatial 49×2048)]
-        C & E --> F[Train M1 merge / M2 attention<br/>early stop on val BLEU-4]
-        F --> G[Evaluate test split<br/>beam 1/3/5 → metrics.json]
-        F --> H[Export<br/>safetensors + vocab + config + model card]
+        A[Flickr8k · COCO · Flickr30k<br/>checksum-verified] --> B[manifest.parquet<br/>validated]
+        B --> C[vocab.json<br/>train only · optional gender-neutral]
+        A --> D[Frozen encoder<br/>CLIP ViT-B/32 or ResNet-50]
+        D --> E[(HDF5 features<br/>7×7 grid)]
+        C & E --> F[Train attention LSTM<br/>early stop on val BLEU-4]
+        F --> R[Calibrate<br/>OOD detector + confidence]
+        F --> G[Evaluate<br/>quality · fairness · reliability]
+        R --> H[Export<br/>safetensors + vocab + config + card + reliability]
     end
     subgraph Serving
-        U[Browser upload] --> V[Validate<br/>≤10 MB, JPEG/PNG/WebP, bomb guard]
-        V --> P[Predictor<br/>load_image → encoder → beam search]
+        U[Browser upload] --> V[Validate<br/>≤10 MB · JPEG/PNG/WebP · bomb guard]
+        V --> P[Predictor<br/>beam search · no repeats · neutral wording]
         H -. SHA-256 verified .-> P
-        P --> T[Caption + heat-maps]
-        T --> S[gTTS → MP3 bytes → st.audio]
+        P --> T[Caption + heat-maps + reliability flags]
+        T --> S[Piper TTS on the server → WAV → browser]
     end
 ```
 
-M2 decoder per step: additive attention over the 7×7 grid → gated context
-`σ(f_β(h)) ⊙ Σ α_i a_i` → `LSTMCell([E(y); z])` → softmax. Loss = cross-entropy (ignoring `<pad>`)
-+ doubly-stochastic attention regulariser. One preprocessing function (`captioner.data.transforms.load_image`)
-is shared by feature extraction, training and serving. Full design: [`docs/architecture.md`](docs/architecture.md).
-
-## What this fixes in the reference project
-
-The original repo (a Keras tutorial clone) had no evaluation, deleted the word "a", used pickles,
-played audio on the server and committed 2.4 GB of data. Each defect D1–D12 from
-[`docs/prd.md`](docs/prd.md) §2 has a named regression test (`test_regression_D2_keeps_article_a`, …);
-see [`docs/TRACEABILITY.md`](docs/TRACEABILITY.md).
+M2 decoder per step: additive attention over the 7×7 grid → gated context `σ(f_β(h)) ⊙ Σ α_i a_i`
+→ `LSTMCell([E(y); z])` → softmax. Loss = cross-entropy (ignoring `<pad>`) + doubly-stochastic
+attention regulariser. One preprocessing function (`captioner.data.transforms.load_image`) is
+shared by feature extraction, training and serving, with the encoder's own resize/normalisation
+profile. Design: [`docs/architecture.md`](docs/architecture.md) (blueprint) plus
+[`docs/DECISIONS.md`](docs/DECISIONS.md) (ADR-020 onward supersede the blueprint where they differ).
 
 ## Setup
 
@@ -56,59 +66,60 @@ make setup          # uv sync --frozen (+ pre-commit hooks)
 make lint test      # ruff, mypy --strict, unit tests with coverage
 ```
 
-Optional offline speech: `uv sync --extra offline-tts` (pyttsx3).
-
 ## Train and evaluate
 
+Open [`notebooks/colab_train.ipynb`](notebooks/colab_train.ipynb) on Colab or Kaggle with a GPU,
+pick a config, and run all cells. Or run locally:
+
+| Config | Data | Encoder | Purpose |
+|---|---|---|---|
+| `configs/coco_clip.yaml` | MS-COCO 2014 | CLIP ViT-B/32 | **recommended demo model** |
+| `configs/coco_attention.yaml` | MS-COCO 2014 | ResNet-50 | COCO baseline |
+| `configs/combined_attention.yaml` | COCO + Flickr30k + Flickr8k | ResNet-50 | broadest data (Flickr30k needs its request form) |
+| `configs/attention_neutral.yaml` | Flickr8k | ResNet-50 | course benchmark, neutral captions |
+| `configs/attention.yaml`, `merge_baseline.yaml`, `attention_finetune.yaml` | Flickr8k | ResNet-50 | blueprint experiments |
+
 ```bash
-make data     CONFIG=configs/attention.yaml   # download Flickr8k (1.1 GB), verify MD5, manifest + vocab
-uv run python scripts/verify_data.py           # 40,000 rows · 6000/1000/1000 · vocab 2,529 + 4
-make features CONFIG=configs/attention.yaml   # ResNet-50 features → data/features/*.h5 (~1.6 GB)
-make train    CONFIG=configs/attention.yaml   # M2; use configs/merge_baseline.yaml for M1
-make eval     CONFIG=configs/attention.yaml   # test split, beam 1/3/5 → reports/<run>/
-make export   CONFIG=configs/attention.yaml   # artifacts/release/0.1.0/
+CONFIG=configs/coco_clip.yaml
+make data     CONFIG=$CONFIG   # download (checksums verified / recorded) + manifest + vocab
+make features CONFIG=$CONFIG   # encoder features → data/features/<dataset>/*.h5
+make train    CONFIG=$CONFIG   # train, early-stop, then calibrate reliability
+make eval     CONFIG=$CONFIG   # test split, beam 1/3/5 → reports/<run>/
+make export   CONFIG=$CONFIG   # artifacts/release/0.1.0/ (+ release.yaml to publish)
 ```
 
-On Colab or Kaggle (free T4 GPU), open [`notebooks/colab_train.ipynb`](notebooks/colab_train.ipynb):
-it clones the repo, runs `uv sync`, then `make data features train eval`.
-
-Any config key can be overridden: `uv run captioner train -c configs/attention.yaml --set train.epochs=10 --set seed=1`.
-Runs are tracked in MLflow (`./mlruns`) and TensorBoard (`artifacts/runs/<run>/tb`).
+Override any key: `uv run captioner train -c $CONFIG --set train.epochs=10 --set seed=1`. Runs are
+tracked in MLflow (`./mlruns`) and TensorBoard (`artifacts/runs/<run>/tb`).
 
 ## Results
 
-Flickr8k official test split (1,000 images × 5 references), `pycocoevalcap` metrics. Every number
-must come from a `reports/<run>/metrics.json` produced by `captioner evaluate`.
+Every number must come from a `reports/<run>/metrics.json` produced by `captioner evaluate`.
 
-| Model | Decoding | BLEU-1 | BLEU-4 | METEOR | ROUGE-L | CIDEr | Source |
-|---|---|---|---|---|---|---|---|
-| M1 merge baseline | greedy | not yet run | not yet run | not yet run | not yet run | not yet run | — |
-| M1 merge baseline | beam 3 | not yet run | not yet run | not yet run | not yet run | not yet run | — |
-| M2 soft attention | greedy | not yet run | not yet run | not yet run | not yet run | not yet run | — |
-| M2 soft attention | beam 3 | not yet run | not yet run | not yet run | not yet run | not yet run | — |
-| M2 soft attention | beam 5 | not yet run | not yet run | not yet run | not yet run | not yet run | — |
+| Model | Data | Decoding | BLEU-4 | METEOR | CIDEr | gender error rate (model) | flagged CIDEr / unflagged | Source |
+|---|---|---|---|---|---|---|---|---|
+| M1 merge baseline | Flickr8k | beam 3 | not yet run | not yet run | not yet run | not yet run | not yet run | — |
+| M2 attention | Flickr8k | beam 3 | not yet run | not yet run | not yet run | not yet run | not yet run | — |
+| M2 attention, neutral | Flickr8k | beam 3 | not yet run | not yet run | not yet run | not yet run | not yet run | — |
+| M2 attention, CLIP (recommended) | COCO | beam 3 | not yet run | not yet run | not yet run | not yet run | not yet run | — |
 
-Targets from [`docs/prd.md`](docs/prd.md) §7: M2 BLEU-4 ≥ 0.19 and CIDEr ≥ 0.50. For reference,
-Show-Attend-Tell reports BLEU-4 19.5 on Flickr8k. The commands for every experiment and ablation
-(E1–E5, A1–A2) are in [`reports/README.md`](reports/README.md).
-
-**Sample outputs:** not yet run. `make eval` writes `reports/<run>/samples.html`, which contains
-25 random, 10 best and 10 worst test captions next to their references, plus attention maps,
-a failure taxonomy and diversity statistics.
+Targets from [`docs/prd.md`](docs/prd.md) §7 (Flickr8k): M2 BLEU-4 ≥ 0.19 and CIDEr ≥ 0.50. Every
+experiment and ablation (E1–E8, A1–A3) with its exact command is in
+[`reports/README.md`](reports/README.md). **Sample outputs:** not yet run; `make eval` writes
+`reports/<run>/samples.html` (random, best and worst captions, attention maps, failure taxonomy).
 
 ## Use the model
 
 ```bash
-uv run captioner predict --image photo.jpg --beam 3                         # latest run
+uv run captioner predict --image photo.jpg --beam 3              # latest run; prints reliability flags
 uv run captioner predict --image photo.jpg --release artifacts/release/0.1.0
-make app                                                                    # Streamlit on :8501
+make app                                                         # Streamlit on :8501
 ```
 
 The app looks for a model in this order: `CAPTIONER_RELEASE_DIR`, `CAPTIONER_RUN_DIR`,
 `artifacts/release/<version>`, the release pinned in `configs/release.yaml` (downloaded and
 SHA-256-verified at start-up), then the newest training run.
 
-**Docker (CPU, non-root):**
+**Docker (CPU, non-root, voice baked in):**
 
 ```bash
 docker build -t captioner .
@@ -121,52 +132,60 @@ Hugging Face Spaces: see [`deploy/huggingface/README.md`](deploy/huggingface/REA
 ## Project layout
 
 ```
-configs/      base · merge_baseline · attention · attention_finetune · release (pinned model)
+configs/      base · attention · merge_baseline · attention_finetune · attention_neutral
+              coco_attention · coco_clip · combined_attention · release (pinned model)
 src/captioner/
-  data/       download (MD5, zip-slip guard) · manifest · text · vocab · transforms · dataset
-  features/   extract (ResNet-50 → HDF5)
-  models/     encoder · merge (M1) · attention (M2) · captioner (protocol, loss)
+  data/       download (MD5/TOFU, zip-slip guard) · manifest · karpathy (COCO/Flickr30k) · sources
+              text · neutral (gender-neutral wording) · vocab · transforms · dataset
+  features/   extract (ResNet-50 / CLIP → HDF5)
+  models/     encoder (ResNet-50, CLIP) · merge (M1) · attention (M2) · captioner (protocol, loss)
   training/   loop · train · early_stopping · checkpoint · tracking (MLflow + TensorBoard)
-  inference/  decode (greedy, beam) · predictor · validation · heatmap · release · service
-  evaluation/ metrics (pycocoevalcap) · evaluate · report (samples.html) · taxonomy
-  tts/        speak (gTTS → bytes, offline fallback)
-  cli.py      captioner download | prepare | extract | train | evaluate | predict | export
+  inference/  decode (greedy, beam, repetition blocking) · predictor · reliability · validation
+              heatmap · release · service
+  evaluation/ metrics · evaluate · calibrate · fairness · taxonomy · report (samples.html)
+  tts/        speak (Piper local neural voice; eSpeak; opt-in gTTS)
+  cli.py      captioner download | prepare | extract | train | calibrate | evaluate | predict | export
 app/          streamlit_app.py · components.py  (+ .streamlit/config.toml design tokens)
 tests/        unit · integration · app · fixtures/mini_flickr (20 real images, 381 KiB)
-docs/         prd · architecture · database · code_style · design_system · security · testing
-              STATUS · DECISIONS (ADRs) · TRACEABILITY
+docs/         seven blueprint docs · STATUS · DECISIONS (ADRs) · TRACEABILITY
 ```
 
 ## Testing
 
 ```bash
-make test                         # unit tests, coverage gate 80 % (currently 93 % unit-only)
-uv run pytest -m integration      # pipeline smoke, overfit-one-batch, determinism, round-trips
-make test-all                     # everything (≈ 2 min on CPU), 98 % coverage
+make test                         # unit + app tests, coverage gate 80 %
+uv run pytest -m integration      # pipelines (Flickr8k, COCO-format, CLIP), overfit, determinism, real voice
+make test-all                     # everything (≈ 3 min on CPU)
 ```
 
 CI runs lint, unit, integration, security (pip-audit, gitleaks, no-pickle grep) and a Docker
-build + health check on every push.
+build that checks the non-root user, the health endpoint, and offline speech.
 
-## Limitations
+## Remaining limitations
 
-- Trained on 8,000 Flickr photos dominated by people and dogs in Western outdoor scenes; other
-  content is often described generically or wrongly.
-- Captions can assume gender or age from appearance and can hallucinate objects, colours and counts.
-- English only. The online voice (gTTS) uses Google's unofficial endpoint and receives the caption
-  text (never the image); if it fails, the app shows the caption without audio.
-- Not a certified assistive device and not for safety-critical use. The accessibility checks that
+These are honest residuals, not things the code hides:
+
+- Coverage still ends where the training data ends. COCO is far broader than Flickr8k, but rare
+  objects, text in images and fine-grained species are often missed. The out-of-domain detector
+  flags many such photos; it can't catch every one.
+- Hallucinations are reduced, not eliminated: an LSTM captioner can still name an object that
+  isn't there. Hedged speech and the calibrated flags tell the listener when to be sceptical.
+- Neutral wording removes gender *guesses*. It can't remove every other bias the training
+  captions carry (for example scene or activity stereotypes).
+- English only. Not a certified assistive device and not for safety-critical use. The checks that
   need a human (screen reader, keyboard-only, 200 % zoom) are listed as pending in `docs/STATUS.md`.
 
-## Dataset citation and licence
+## Data, model and voice licences
 
 - **Code:** MIT ([`LICENSE`](LICENSE)).
-- **Data:** Flickr8k images belong to their Flickr owners and are provided for **non-commercial
-  research and educational use only**. The dataset is downloaded at run time and is never stored
-  in this repository. Cite:
-
-  > M. Hodosh, P. Young and J. Hockenmaier (2013). *Framing Image Description as a Ranking Task:
-  > Data, Models and Evaluation Metrics.* Journal of Artificial Intelligence Research 47, 853–899.
+- **Images:** Flickr8k / Flickr30k images belong to their Flickr owners; COCO images are under
+  their Flickr licences. All are for **non-commercial research and education only**. Datasets
+  are downloaded at run time and never stored in this repository. Cite:
+  - M. Hodosh, P. Young, J. Hockenmaier (2013). *Framing Image Description as a Ranking Task.* JAIR 47.
+  - T.-Y. Lin et al. (2014). *Microsoft COCO: Common Objects in Context.* ECCV.
+  - P. Young et al. (2014). *From image descriptions to visual denotations.* TACL 2 (Flickr30k).
+  - A. Karpathy, L. Fei-Fei (2015). *Deep Visual-Semantic Alignments for Generating Image Descriptions.* CVPR (splits).
+- **Voice:** Piper `en-us lessac medium`, trained on the Blizzard 2013 Lessac data (research licence).
 
 ## Credits
 
