@@ -62,7 +62,10 @@ extend-exclude = ["notebooks", "docs", "*.md"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "N", "SIM", "PTH", "RUF", "NPY", "PD"]
-ignore = ["N812"]  # `import torch.nn.functional as F` is the PyTorch convention
+ignore = [
+    "N812",  # `import torch.nn.functional as F` is the PyTorch convention
+    "RUF001", "RUF002", "RUF003",  # Greek letters / math symbols in model docstrings are intended
+]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["N802", "N806"]
