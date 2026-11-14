@@ -41,3 +41,15 @@ def detokenize(tokens: list[str]) -> str:
         return ""
     sentence = " ".join(tokens)
     return sentence[0].upper() + sentence[1:] + "."
+
+
+# Function words that may legitimately repeat inside one caption ("a dog in a park").
+def _wordset(text: str) -> frozenset[str]:
+    return frozenset(text.split())
+
+
+FUNCTION_WORDS = _wordset(
+    """a an the is are was were be been being in on of at with and or to its it his her their
+    they them this that these those while for by from into through up down out over under
+    some front behind near next another other each two three one has have"""
+)

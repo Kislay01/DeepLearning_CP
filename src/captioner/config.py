@@ -120,6 +120,8 @@ class DecodeConfig(_Strict):
     length_alpha: float = Field(0.7, ge=0.0)
     max_len: int = Field(25, ge=2)
     gender_neutral_output: bool = True  # ADR-021: rewrite gendered words in served captions
+    no_repeat_ngram: int = Field(3, ge=0)  # ADR-022: ban repeated n-grams (0 = off)
+    block_repeated_words: bool = True  # ADR-022: each content word at most once
 
 
 class EvalConfig(_Strict):
@@ -129,6 +131,9 @@ class EvalConfig(_Strict):
     n_best_worst: int = 10
     n_attention: int = 10
     n_taxonomy: int = 100
+    reliability_centroids: int = Field(64, ge=1)  # ADR-022
+    ood_quantile: float = Field(0.99, gt=0.0, lt=1.0)
+    confidence_quantile: float = Field(0.10, gt=0.0, lt=1.0)
 
 
 class AppConfig(_Strict):

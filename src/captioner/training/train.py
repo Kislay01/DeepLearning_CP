@@ -28,7 +28,7 @@ from captioner.data.download import raw_layout
 from captioner.data.prepare import PreparedData, load_prepared
 from captioner.data.transforms import build_train_augment
 from captioner.features.extract import feature_paths
-from captioner.inference.decode import Hypothesis
+from captioner.inference.decode import Hypothesis, build_repeat_policy
 from captioner.models.captioner import (
     ImageCaptioner,
     build_model,
@@ -223,6 +223,10 @@ def run_training(cfg: Config, device: torch.device | None = None) -> TrainResult
         )
         for name in ("config.yaml", "vocab.json", "history.json", "best.pt"):
             tracker.log_artifact(run_dir / name)
+    if not cfg.train.finetune_encoder:
+        from captioner.evaluation.calibrate import calibrate_run
+
+        calibrate_run(cfg, run_dir, device)
     best = max(history, key=lambda h: h["val/bleu4"])
     return TrainResult(run_dir, best["val/bleu4"], int(best["epoch"]), len(history), history)
 
@@ -241,7 +245,10 @@ def _fit(
 ) -> list[dict[str, float]]:
     history: list[dict[str, float]] = []
     alpha_c = cfg.model.alpha_c if cfg.model.kind == "attention" else 0.0
-    decoder = beam_decoder(cfg.train.val_beam, cfg.decode.max_len, cfg.decode.length_alpha)
+    repeat = build_repeat_policy(
+        prepared.vocab.itos, cfg.decode.no_repeat_ngram, cfg.decode.block_repeated_words
+    )
+    decoder = beam_decoder(cfg.train.val_beam, cfg.decode.max_len, cfg.decode.length_alpha, repeat)
     for epoch in range(1, cfg.train.epochs + 1):
         tr = train_epoch(
             model,

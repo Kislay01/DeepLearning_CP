@@ -11,7 +11,7 @@ from dataclasses import dataclass
 
 import torch
 
-from captioner.data.vocab import END_IDX, PAD_IDX, START_IDX, UNK_IDX
+from captioner.data.vocab import END_IDX, PAD_IDX, SPECIAL_IDS, START_IDX, UNK_IDX
 from captioner.models.captioner import CaptionModel, DecoderState
 
 _BLOCKED = (PAD_IDX, START_IDX, UNK_IDX)
@@ -56,9 +56,61 @@ def _block(logp: torch.Tensor) -> torch.Tensor:
     return logp
 
 
+@dataclass(frozen=True)
+class RepeatPolicy:
+    """Anti-hallucination constraints on repetition (ADR-022).
+
+    Attributes:
+        ngram: Ban any n-gram that already occurs in the hypothesis (0 disables).
+        content_mask: ``(V,)`` bool, True for content words that may appear only once
+            (``None`` disables), e.g. no "a dog and a dog".
+    """
+
+    ngram: int = 0
+    content_mask: torch.Tensor | None = None
+
+
+def build_repeat_policy(itos: tuple[str, ...], ngram: int, block_words: bool) -> RepeatPolicy:
+    """Policy for a vocabulary: content words are everything except specials and function words."""
+    from captioner.data.text import FUNCTION_WORDS
+
+    mask = None
+    if block_words:
+        mask = torch.tensor(
+            [i not in SPECIAL_IDS and w not in FUNCTION_WORDS for i, w in enumerate(itos)]
+        )
+    return RepeatPolicy(ngram=ngram, content_mask=mask)
+
+
+def _repeat_penalty(
+    logp: torch.Tensor, history: torch.Tensor, policy: RepeatPolicy | None
+) -> torch.Tensor:
+    """Set log-probs of tokens that would repeat a banned n-gram or content word to -inf."""
+    if policy is None or history.shape[1] == 0:
+        return logp
+    penalty = torch.zeros_like(logp)
+    n = policy.ngram
+    if n >= 2 and history.shape[1] >= n - 1:
+        prefix = history[:, history.shape[1] - (n - 1) :]  # (R, n-1)
+        if history.shape[1] >= n:
+            windows = history.unfold(1, n, 1)  # (R, W, n)
+            match = (windows[:, :, :-1] == prefix.unsqueeze(1)).all(-1)  # (R, W)
+            vals = torch.where(match, NEG_INF, 0.0).to(logp.dtype)
+            penalty.scatter_reduce_(1, windows[:, :, -1], vals, reduce="amin")
+    if policy.content_mask is not None:
+        mask = policy.content_mask.to(logp.device)
+        seen = torch.zeros_like(logp, dtype=torch.bool).scatter_(1, history, True)  # (R, V)
+        penalty = penalty.masked_fill(seen & mask.unsqueeze(0), NEG_INF)
+    return logp + penalty
+
+
 @torch.inference_mode()
 def greedy_decode(
-    model: CaptionModel, feats: torch.Tensor, max_len: int, length_alpha: float = 0.0
+    model: CaptionModel,
+    feats: torch.Tensor,
+    max_len: int,
+    length_alpha: float = 0.0,
+    repeat: RepeatPolicy | None = None,
 ) -> list[Hypothesis]:
     """Pick the most likely token at every step.
 
@@ -67,6 +119,7 @@ def greedy_decode(
         feats: Encoder output for B images.
         max_len: Hard cap on generated tokens including ``<end>``.
         length_alpha: Only used to fill ``Hypothesis.score``.
+        repeat: Optional repetition constraints.
 
     Returns:
         One hypothesis per image.
@@ -79,9 +132,11 @@ def greedy_decode(
     lengths = torch.zeros(b, dtype=torch.long)
     done = torch.zeros(b, dtype=torch.bool)
     alphas: list[torch.Tensor] = []
+    hist = torch.empty((b, 0), dtype=torch.long, device=feats.device)
     for t in range(max_len):
         logp, state, alpha = model.step(tokens, state)
-        best_lp, tokens = _block(logp).max(dim=-1)  # (B,), (B,)
+        best_lp, tokens = _repeat_penalty(_block(logp.float()), hist, repeat).max(dim=-1)  # (B,)
+        hist = torch.cat([hist, tokens.unsqueeze(1)], dim=1)
         active = ~done
         out_ids[active, t] = tokens[active].cpu()
         logprob[active] += best_lp[active].float().cpu()
@@ -126,6 +181,7 @@ def beam_search(
     beam: int,
     max_len: int,
     length_alpha: float = 0.7,
+    repeat: RepeatPolicy | None = None,
 ) -> list[Hypothesis]:
     """Batched beam search with length normalisation.
 
@@ -139,6 +195,7 @@ def beam_search(
         beam: Beam width; 1 == greedy.
         max_len: Hard cap on generated tokens including ``<end>``.
         length_alpha: Length-normalisation exponent (0 disables it).
+        repeat: Optional repetition constraints (n-gram / content-word blocking).
 
     Returns:
         One best hypothesis per image, specials removed.
@@ -154,7 +211,7 @@ def beam_search(
     lengths = torch.zeros(b * k, dtype=torch.long, device=dev)
     for _ in range(max_len):
         logp, state, alpha = model.step(tokens, state)
-        logp = _block(logp.float())  # (B*k, V)
+        logp = _repeat_penalty(_block(logp.float()), history, repeat)  # (B*k, V)
         vocab_size = logp.shape[1]
         logp[finished] = NEG_INF
         logp[finished, PAD_IDX] = 0.0  # finished beams carry over unchanged
@@ -206,9 +263,14 @@ def _beam_hyp(
 
 
 def decode(
-    model: CaptionModel, feats: torch.Tensor, beam: int, max_len: int, length_alpha: float = 0.7
+    model: CaptionModel,
+    feats: torch.Tensor,
+    beam: int,
+    max_len: int,
+    length_alpha: float = 0.7,
+    repeat: RepeatPolicy | None = None,
 ) -> list[Hypothesis]:
     """Greedy when ``beam == 1`` (scores still length-normalised), beam search otherwise."""
     if beam == 1:
-        return greedy_decode(model, feats, max_len, length_alpha)
-    return beam_search(model, feats, beam, max_len, length_alpha)
+        return greedy_decode(model, feats, max_len, length_alpha, repeat)
+    return beam_search(model, feats, beam, max_len, length_alpha, repeat)
