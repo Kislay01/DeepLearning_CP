@@ -1,7 +1,7 @@
 """Presentational components for the caption demo (docs/design_system.md §4).
 
 Only layout lives here; models, validation and speech are in ``captioner.*``.
-No raw HTML is ever rendered (no ``unsafe_allow_html``).
+No raw HTML is ever rendered.
 """
 
 from __future__ import annotations
