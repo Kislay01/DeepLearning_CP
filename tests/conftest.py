@@ -61,3 +61,16 @@ def mini_cfg(tmp_path: Path) -> Config:
     cfg = make_config(tmp_path)
     install_mini_raw(cfg)
     return cfg
+
+
+@pytest.fixture(scope="session")
+def prepared_mini(tmp_path_factory: pytest.TempPathFactory) -> Config:
+    """Session-wide mini dataset with manifest, vocab and random-weight features. Read-only."""
+    from captioner.data.prepare import prepare_data
+    from captioner.features.extract import extract_features
+
+    cfg = make_config(tmp_path_factory.mktemp("prepared"))
+    install_mini_raw(cfg)
+    prepare_data(cfg)
+    extract_features(cfg)
+    return cfg
