@@ -111,3 +111,9 @@ Format: context → decision → consequence. Numbered in the order they were ta
 - **Context:** `code_style.md` §9 keeps ML out of `app/streamlit_app.py`. The app also needs model discovery, a 10 s inference budget (security.md §2.7) and heat-map construction.
 - **Decision:** `service.py` provides `resolve_model_source` (env `CAPTIONER_RELEASE_DIR` → `CAPTIONER_RUN_DIR` → `artifacts/release/<version>` → latest run), `load_predictor` (wrapped in `st.cache_resource` by the app), `caption_with_timeout` (thread pool + `future.result(timeout)`), and `build_heatmaps`.
 - **Consequence:** the app is layout plus callbacks. Serving behaviour is unit-tested without Streamlit.
+
+## ADR-019 — Docker image installs CPU torch wheels of the locked versions
+
+- **Context:** ADR-001 locks PyPI torch, which pulls about 3 GB of CUDA libraries. The serving image is CPU-only (architecture.md §10).
+- **Decision:** the Dockerfile exports `uv.lock` to requirements, installs the **same** `torch`/`torchvision` versions from the official CPU index (`download.pytorch.org/whl/cpu`), installs the rest of the locked requirements, and pre-downloads the IMAGENET1K_V2 weights into `TORCH_HOME` at build time so the container runs with a read-only filesystem. It runs as uid 10001 with a health check. CI builds the image, checks the uid, and probes `/_stcore/health` with `--read-only`.
+- **Consequence:** small CPU image with no runtime downloads apart from the pinned model release, which is SHA-256-verified.
