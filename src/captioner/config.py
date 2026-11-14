@@ -136,6 +136,21 @@ class AppConfig(_Strict):
     max_heatmap_words: int = 12
 
 
+class TTSConfig(_Strict):
+    """Speech settings. Default is a local neural voice; nothing leaves the server (ADR-020)."""
+
+    engine: Literal["piper", "offline", "gtts", "off"] = "piper"
+    allow_online: bool = False
+    voice_url: str = (
+        "https://github.com/rhasspy/piper/releases/download/v0.0.2/voice-en-us-lessac-medium.tar.gz"
+    )
+    voice_sha256: str = "d45ca50084c0558eb9581cd7d26938043bc8853513da47c63b94d95a2367a5c9"
+    model_file: str = "en-us-lessac-medium.onnx"
+    model_sha256: str = "fa5998eb236e4291f7920d88b897225d0f2ce90ff6193480fbaa279d7814f347"
+    config_file: str = "en-us-lessac-medium.onnx.json"
+    config_sha256: str = "f3e0b906861cc2fb8a50e12ceca263afe226ff9688f60e9d4ef943d4f047a513"
+
+
 class Config(_Strict):
     name: str = "base"
     seed: int = 42
@@ -148,6 +163,7 @@ class Config(_Strict):
     decode: DecodeConfig = Field(default_factory=DecodeConfig)
     eval: EvalConfig = Field(default_factory=EvalConfig)
     app: AppConfig = Field(default_factory=AppConfig)
+    tts: TTSConfig = Field(default_factory=TTSConfig)
 
     def with_overrides(self, overrides: dict[str, Any]) -> Config:
         """Return a copy with a nested ``overrides`` dict deep-merged in."""
