@@ -68,6 +68,15 @@ train:
   finetune_encoder: false
   encoder_lr: 1.0e-4
   init_from: null          # path to a best.pt whose decoder weights initialise this run
+  # ADR-025/026 — modern recipe knobs; these defaults reproduce the blueprint exactly
+  objective: xe            # xe (teacher forcing) | scst (self-critical, CIDEr-D reward)
+  select_metric: bleu4     # bleu4 | cider — early stopping / best checkpoint / LR plateau
+  label_smoothing: 0.0
+  optimizer: adam          # adam | adamw (no decay on biases, norms, embeddings)
+  scheduler: plateau       # plateau | cosine (per-step, with warmup)
+  warmup_steps: 0
+  ema_decay: 0.0           # >0 keeps an exponential moving average of weights for eval/export
+  scst_samples: 5          # sampled captions per image; baseline = mean of the others
 
 decode:
   beam: 3

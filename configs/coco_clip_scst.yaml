@@ -1,0 +1,19 @@
+# Stage 2 of the recommended model (ADR-026): self-critical sequence training with a CIDEr-D
+# reward, starting from the cross-entropy model trained with configs/coco_clip.yaml.
+#   captioner train -c configs/coco_clip_scst.yaml --set train.init_from=artifacts/runs/<xe run>/best.pt
+defaults: [coco_clip]
+name: coco_clip_scst
+train:
+  objective: scst
+  select_metric: cider
+  scst_samples: 5
+  lr: 2.0e-5
+  optimizer: adam
+  weight_decay: 0.0
+  scheduler: plateau
+  warmup_steps: 0
+  ema_decay: 0.0
+  label_smoothing: 0.0
+  batch_size: 64
+  epochs: 15
+  patience: 3

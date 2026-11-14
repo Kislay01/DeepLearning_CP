@@ -135,6 +135,15 @@ class TrainConfig(_Strict):
     finetune_encoder: bool = False
     encoder_lr: float = 1e-4
     init_from: str | None = None
+    # ADR-025: modern training recipe (defaults reproduce the blueprint)
+    objective: Literal["xe", "scst"] = "xe"
+    select_metric: Literal["bleu4", "cider"] = "bleu4"
+    label_smoothing: float = Field(0.0, ge=0.0, lt=1.0)
+    optimizer: Literal["adam", "adamw"] = "adam"
+    scheduler: Literal["plateau", "cosine"] = "plateau"
+    warmup_steps: int = Field(0, ge=0)
+    ema_decay: float = Field(0.0, ge=0.0, lt=1.0)
+    scst_samples: int = Field(5, ge=2)
 
 
 class DecodeConfig(_Strict):

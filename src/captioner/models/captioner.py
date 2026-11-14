@@ -77,7 +77,11 @@ def step_mask(lengths: torch.Tensor, steps: int) -> torch.Tensor:
 
 
 def caption_loss(
-    output: ModelOutput, captions: torch.Tensor, lengths: torch.Tensor, alpha_c: float
+    output: ModelOutput,
+    captions: torch.Tensor,
+    lengths: torch.Tensor,
+    alpha_c: float,
+    label_smoothing: float = 0.0,
 ) -> LossOutput:
     """Cross-entropy over real tokens plus the doubly-stochastic attention regulariser.
 
@@ -88,6 +92,7 @@ def caption_loss(
         captions: ``(B, T)`` ids; targets are ``captions[:, 1:]``.
         lengths: ``(B,)`` caption lengths incl. ``<start>``/``<end>``.
         alpha_c: Regulariser weight λ.
+        label_smoothing: Cross-entropy label smoothing (ADR-025); 0 = plain CE.
 
     Returns:
         ``LossOutput``.
@@ -95,7 +100,10 @@ def caption_loss(
     targets = captions[:, 1:]  # (B, T-1)
     logits = output.logits
     ce = F.cross_entropy(
-        logits.reshape(-1, logits.shape[-1]), targets.reshape(-1), ignore_index=PAD_IDX
+        logits.reshape(-1, logits.shape[-1]),
+        targets.reshape(-1),
+        ignore_index=PAD_IDX,
+        label_smoothing=label_smoothing,
     )
     reg = torch.zeros((), device=ce.device)
     if output.alphas is not None and alpha_c > 0:

@@ -5,3 +5,7 @@ defaults: [attention]
 name: attention_neutral
 vocab:
   gender_neutral: true
+train:
+  select_metric: cider
+  label_smoothing: 0.1
+  ema_decay: 0.998

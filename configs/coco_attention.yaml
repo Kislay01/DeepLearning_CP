@@ -19,8 +19,16 @@ vocab:
   gender_neutral: true
 train:
   batch_size: 128
-  epochs: 20
-  patience: 4
+  epochs: 25
+  patience: 5
+  # Modern recipe (ADR-025): select on CIDEr-D, label smoothing, AdamW, cosine with warmup, EMA.
+  select_metric: cider
+  label_smoothing: 0.1
+  optimizer: adamw
+  weight_decay: 0.01
+  scheduler: cosine
+  warmup_steps: 1000
+  ema_decay: 0.999
 encoder:
   batch_size: 64
   num_workers: 4
