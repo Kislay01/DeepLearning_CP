@@ -1,0 +1,12 @@
+# E5 — M2 + encoder fine-tuning (FR-12): unfreeze ResNet-50 layer4, train from images.
+# Start from a trained M2 decoder:
+#   captioner train -c configs/attention_finetune.yaml --set train.init_from=artifacts/runs/<run>/best.pt
+defaults: [attention]
+name: attention_finetune
+train:
+  finetune_encoder: true
+  encoder_lr: 1.0e-4
+  lr: 1.0e-4
+  batch_size: 32
+  epochs: 10
+  patience: 3

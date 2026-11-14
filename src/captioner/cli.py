@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
+import yaml
 from rich.console import Console
 
 from captioner import __version__
@@ -21,9 +22,30 @@ ConfigOpt = Annotated[
 DEFAULT_CONFIG = Path("configs/attention.yaml")
 
 
-def _load(config: Path) -> Config:
+SetOpt = Annotated[
+    list[str] | None,
+    typer.Option("--set", help="Override a config key, e.g. --set train.epochs=2 (repeatable)"),
+]
+
+
+def parse_overrides(pairs: list[str] | None) -> dict[str, Any]:
+    """Turn ``["a.b=1", "c=x"]`` into ``{"a": {"b": 1}, "c": "x"}`` (values parsed as YAML)."""
+    out: dict[str, Any] = {}
+    for pair in pairs or []:
+        key, sep, raw = pair.partition("=")
+        if not sep or not key:
+            raise typer.BadParameter(f"expected key=value, got {pair!r}")
+        node = out
+        *parents, leaf = key.split(".")
+        for part in parents:
+            node = node.setdefault(part, {})
+        node[leaf] = yaml.safe_load(raw)
+    return out
+
+
+def _load(config: Path, overrides: list[str] | None = None) -> Config:
     setup_logging()
-    return load_config(config)
+    return load_config(config, overrides=parse_overrides(overrides))
 
 
 @app.command()
@@ -63,6 +85,24 @@ def extract(config: ConfigOpt = DEFAULT_CONFIG, device: str | None = None) -> No
     paths = extract_features(_load(config), get_device(device))
     for kind, path in paths.items():
         console.print(f"[green]{kind}[/] → {path}")
+
+
+@app.command()
+def train(
+    config: ConfigOpt = DEFAULT_CONFIG,
+    set_: SetOpt = None,
+    device: str | None = None,
+) -> None:
+    """Train a model (validation every epoch, early stopping on val BLEU-4)."""
+    from captioner.training.train import run_training
+    from captioner.utils.device import get_device
+
+    result = run_training(_load(config, set_), get_device(device))
+    console.print(
+        f"[green]Run[/] {result.run_dir}\n"
+        f"best val BLEU-4 {result.best_bleu4:.4f} at epoch {result.best_epoch} "
+        f"({result.epochs_run} epochs run)"
+    )
 
 
 if __name__ == "__main__":  # pragma: no cover

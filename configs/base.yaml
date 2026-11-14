@@ -67,6 +67,7 @@ train:
   max_steps_per_epoch: null
   finetune_encoder: false
   encoder_lr: 1.0e-4
+  init_from: null          # path to a best.pt whose decoder weights initialise this run
 
 decode:
   beam: 3
