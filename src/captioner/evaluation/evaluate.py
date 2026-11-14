@@ -37,7 +37,7 @@ from captioner.evaluation.taxonomy import diversity, taxonomy_counts
 from captioner.features.extract import feature_paths
 from captioner.inference.decode import Hypothesis, build_repeat_policy
 from captioner.models.captioner import ImageCaptioner, feature_kind_for
-from captioner.models.encoder import ResNetEncoder
+from captioner.models.encoder import build_encoder
 from captioner.training.checkpoint import CheckpointError, LoadedRun, load_run
 from captioner.training.loop import beam_decoder, decode_split
 from captioner.utils.device import get_device
@@ -58,7 +58,7 @@ def _model_and_data(
     cfg: Config, run: LoadedRun, table: CaptionTable
 ) -> tuple[nn.Module, Dataset[tuple[torch.Tensor, int]]]:
     if run.encoder_state:  # fine-tuned encoder → evaluate from images
-        encoder = ResNetEncoder(run.cfg.encoder.weights)
+        encoder = build_encoder(run.cfg.encoder.name, run.cfg.encoder.weights)
         encoder.load_state_dict(run.encoder_state)
         return ImageCaptioner(encoder, run.model), ImageTableDataset(table, image_root(cfg))
     path = feature_paths(cfg)[feature_kind_for(run.cfg.model)]

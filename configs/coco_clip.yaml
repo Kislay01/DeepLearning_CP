@@ -1,0 +1,13 @@
+# Recommended model (ADR-024): CLIP ViT-B/32 patch features + soft-attention LSTM, trained on
+# MS-COCO with gender-neutral captions, repetition blocking and calibrated reliability.
+# CLIP was pre-trained on web-scale image–text pairs, so it recognises far more than ImageNet.
+# Features: 49×768 per image (≈ 9 GB float16 for COCO, vs ≈ 25 GB for ResNet-50).
+defaults: [coco_attention]
+name: coco_clip
+encoder:
+  name: clip_vit_b32
+  weights: openai
+  resize: 224
+model:
+  encoder_dim: 768
+  num_regions: 49

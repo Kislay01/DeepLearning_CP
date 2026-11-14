@@ -15,8 +15,8 @@ from torch.utils.data import DataLoader, Dataset
 
 from captioner.config import Config
 from captioner.data.sources import feature_entries
-from captioner.data.transforms import load_image
-from captioner.models.encoder import ResNetEncoder
+from captioner.data.transforms import load_image, transform_for
+from captioner.models.encoder import build_encoder
 from captioner.utils.device import get_device
 from captioner.utils.io import bytes_digest, git_sha
 
@@ -33,14 +33,15 @@ class FeatureFileError(ValueError):
 class ImageFolderDataset(Dataset[torch.Tensor]):
     """Images in a fixed order, preprocessed with the shared ``load_image``."""
 
-    def __init__(self, paths: Sequence[Path]) -> None:
+    def __init__(self, paths: Sequence[Path], encoder_name: str = "resnet50") -> None:
         self.paths = list(paths)
+        self.transform = transform_for(encoder_name)
 
     def __len__(self) -> int:
         return len(self.paths)
 
     def __getitem__(self, i: int) -> torch.Tensor:
-        return load_image(self.paths[i])
+        return load_image(self.paths[i], self.transform)
 
 
 def feature_paths(cfg: Config) -> dict[FeatureKind, Path]:
@@ -102,9 +103,9 @@ def extract_features(cfg: Config, device: torch.device | None = None) -> dict[Fe
     device = device or get_device()
     entries = feature_entries(cfg)
     names = [image_id for image_id, _ in entries]
-    encoder = ResNetEncoder(cfg.encoder.weights).to(device).eval()
+    encoder = build_encoder(cfg.encoder.name, cfg.encoder.weights).to(device).eval()
     loader = DataLoader(
-        ImageFolderDataset([path for _, path in entries]),
+        ImageFolderDataset([path for _, path in entries], cfg.encoder.name),
         batch_size=cfg.encoder.batch_size,
         num_workers=cfg.encoder.num_workers,
         shuffle=False,
@@ -119,7 +120,7 @@ def extract_features(cfg: Config, device: torch.device | None = None) -> dict[Fe
                 spatial = encoder(images.to(device))  # (B, L, C)
                 end = start + spatial.shape[0]
                 files["spatial"]["features"][start:end] = spatial.half().cpu().numpy()
-                files["pooled"]["features"][start:end] = encoder.pool(spatial).half().cpu().numpy()
+                files["pooled"]["features"][start:end] = spatial.mean(dim=1).half().cpu().numpy()
                 start = end
                 logger.info("Encoded %d / %d images", end, len(names))
     finally:

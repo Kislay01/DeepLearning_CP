@@ -21,6 +21,7 @@ from PIL import Image
 from captioner.config import Config
 from captioner.data.dataset import CaptionTable
 from captioner.data.sources import image_root
+from captioner.data.transforms import PROFILES, PreprocessProfile
 from captioner.data.vocab import Vocabulary
 from captioner.evaluation.metrics import METRIC_KEYS, CocoResult
 from captioner.inference.decode import Hypothesis
@@ -61,7 +62,13 @@ def _card(image_dir: Path, table: CaptionTable, i: int, text: str, res: CocoResu
 
 
 def _attention_figure(
-    image_dir: Path, image_id: str, file_name: str, words: list[str], hyp: Hypothesis, side: int
+    image_dir: Path,
+    image_id: str,
+    file_name: str,
+    words: list[str],
+    hyp: Hypothesis,
+    side: int,
+    profile: PreprocessProfile | None = None,
 ) -> str:
     if hyp.attention is None or not words:
         return ""
@@ -74,7 +81,7 @@ def _attention_figure(
         for ax in axes.flat:
             ax.axis("off")
         for ax, word, grid in zip(axes.flat, words, grids, strict=False):
-            ax.imshow(overlay(view, grid))
+            ax.imshow(overlay(view, grid, profile=profile))
             ax.set_title(word, fontsize=10)
     buf = io.BytesIO()
     fig.tight_layout()
@@ -133,6 +140,7 @@ def write_samples_html(
             vocab.decode(hyps[i].ids),
             hyps[i],
             side,
+            PROFILES[cfg.encoder.name],
         )
         for i in picks[: cfg.eval.n_attention]
     )

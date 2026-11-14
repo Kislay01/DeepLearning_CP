@@ -16,6 +16,7 @@ from typing import Literal
 from PIL import Image
 
 from captioner import __version__
+from captioner.data.transforms import PROFILES
 from captioner.inference.heatmap import attention_summary, overlay
 from captioner.inference.predictor import Caption, Predictor
 from captioner.inference.release import ReleaseError, fetch_release, load_release, load_release_spec
@@ -99,13 +100,18 @@ class Heatmaps:
     summary: str
 
 
-def build_heatmaps(image: Image.Image, caption: Caption, max_words: int) -> Heatmaps | None:
+def build_heatmaps(
+    image: Image.Image, caption: Caption, max_words: int, encoder_name: str = "resnet50"
+) -> Heatmaps | None:
     """Overlays for up to ``max_words`` words, or ``None`` for models without attention."""
     if caption.attention is None or not caption.tokens:
         return None
     words = list(caption.tokens[:max_words])
     grids = list(caption.attention[:max_words])
-    return Heatmaps([overlay(image, g) for g in grids], words, attention_summary(words, grids))
+    profile = PROFILES[encoder_name]
+    return Heatmaps(
+        [overlay(image, g, profile=profile) for g in grids], words, attention_summary(words, grids)
+    )
 
 
 def _published_release() -> Path | None:
