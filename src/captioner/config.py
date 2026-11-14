@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class _Strict(BaseModel):
@@ -98,7 +98,7 @@ class VocabConfig(_Strict):
 
 
 class EncoderConfig(_Strict):
-    name: Literal["resnet50"] = "resnet50"
+    name: Literal["resnet50", "clip_vit_b32"] = "resnet50"
     weights: str | None = "IMAGENET1K_V2"
     resize: int = 256
     image_size: int = 224
@@ -222,6 +222,16 @@ class Config(_Strict):
         return self.paths.artifacts_dir / (
             f"vocab_{'_'.join(parts)}.json" if parts else "vocab.json"
         )
+
+    @model_validator(mode="after")
+    def _encoder_matches_decoder(self) -> Config:
+        dims = {"resnet50": 2048, "clip_vit_b32": 768}
+        if self.model.encoder_dim != dims[self.encoder.name]:
+            raise ValueError(
+                f"model.encoder_dim={self.model.encoder_dim} but {self.encoder.name} "
+                f"outputs {dims[self.encoder.name]}"
+            )
+        return self
 
     def with_overrides(self, overrides: dict[str, Any]) -> Config:
         """Return a copy with a nested ``overrides`` dict deep-merged in."""

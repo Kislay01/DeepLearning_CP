@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import io
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
@@ -39,21 +40,53 @@ def to_rgb(img: Image.Image) -> Image.Image:
     return img.convert("RGB")
 
 
+CLIP_MEAN = (0.48145466, 0.4578275, 0.40821073)
+CLIP_STD = (0.26862954, 0.26130258, 0.27577711)
+
+
+@dataclass(frozen=True)
+class PreprocessProfile:
+    """Geometry and normalisation an encoder was pre-trained with."""
+
+    resize: int = RESIZE
+    crop: int = CROP
+    mean: tuple[float, float, float] = IMAGENET_MEAN
+    std: tuple[float, float, float] = IMAGENET_STD
+    interpolation: str = "bilinear"
+
+
+PROFILES = {
+    "resnet50": PreprocessProfile(),
+    "clip_vit_b32": PreprocessProfile(224, 224, CLIP_MEAN, CLIP_STD, "bicubic"),
+}
+
+
 def build_transform(
-    resize: int = RESIZE, crop: int = CROP
+    resize: int = RESIZE, crop: int = CROP, profile: PreprocessProfile | None = None
 ) -> Callable[[Image.Image], torch.Tensor]:
     """Deterministic eval/serve transform: resize shorter side, center-crop, normalise."""
+    p = profile or PreprocessProfile(resize, crop)
+    mode = (
+        T.InterpolationMode.BICUBIC
+        if p.interpolation == "bicubic"
+        else T.InterpolationMode.BILINEAR
+    )
     return cast(
         Callable[[Image.Image], torch.Tensor],
         T.Compose(
             [
-                T.Resize(resize, interpolation=T.InterpolationMode.BILINEAR, antialias=True),
-                T.CenterCrop(crop),
+                T.Resize(p.resize, interpolation=mode, antialias=True),
+                T.CenterCrop(p.crop),
                 T.ToTensor(),
-                T.Normalize(IMAGENET_MEAN, IMAGENET_STD),
+                T.Normalize(p.mean, p.std),
             ]
         ),
     )
+
+
+def transform_for(encoder_name: str) -> Callable[[Image.Image], torch.Tensor]:
+    """The serve/extract transform matching an encoder (same function for train and serve)."""
+    return build_transform(profile=PROFILES[encoder_name])
 
 
 def build_train_augment(crop: int = CROP) -> Callable[[Image.Image], torch.Tensor]:
