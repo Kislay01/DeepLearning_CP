@@ -38,7 +38,7 @@ def test_pipeline_smoke_via_cli(tmp_path: Path) -> None:
     for args in (["prepare"], ["extract"], ["train", "--set", "train.epochs=2"]):
         result = runner.invoke(app, [*args, "--config", str(config_file)])
         assert result.exit_code == 0, result.output
-    assert cfg.paths.manifest_path.exists() and cfg.paths.vocab_path.exists()
+    assert cfg.paths.manifest_path.exists() and cfg.vocab_file.exists()
     assert all(p.exists() for p in feature_paths(cfg).values())
     runs = list(cfg.paths.runs_dir.glob("smoke-*/best.pt"))
     assert len(runs) == 1

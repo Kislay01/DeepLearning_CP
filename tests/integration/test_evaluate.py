@@ -29,7 +29,10 @@ def test_regression_D1_evaluation_reports(
     assert set(metrics["results"]) == {"beam_1", "beam_2"}
     for res in metrics["results"].values():
         assert set(METRIC_KEYS) <= set(res)
-        assert {"diversity", "failure_taxonomy"} <= set(res)
+        assert {"diversity", "failure_taxonomy", "fairness_model", "fairness_served"} <= set(res)
+        assert set(METRIC_KEYS) <= set(res["raw_references"])
+        assert res["fairness_served"]["gender_word_rate"] == 0.0  # ADR-021 rewrite
+    assert metrics["references"] == "gender_neutral"
     preds = pd.read_csv(result.report_dir / "predictions.csv")
     expected = [
         "image_id",

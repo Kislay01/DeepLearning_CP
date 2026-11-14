@@ -112,6 +112,6 @@ def test_vocab_hash_tracks_manifest(mini_cfg: Config) -> None:
     assert manifest_sha256(changed) != prepared.manifest_sha256
     v2 = build_vocab_from_manifest(changed, 1, 25)
     assert v2.sha256_manifest != prepared.vocab.sha256_manifest
-    v2.save(mini_cfg.paths.vocab_path)
+    v2.save(mini_cfg.vocab_file)
     with pytest.raises(VocabError, match="different manifest"):
         load_prepared(mini_cfg)
