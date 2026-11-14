@@ -157,5 +157,5 @@ def bleu4_for(hyps: list[Hypothesis], table: CaptionTable, vocab: Vocabulary) ->
     """NLTK corpus BLEU-4 of decoded hypotheses against the table's raw references."""
     return corpus_bleu4(
         [vocab.decode(h.ids) for h in hyps],
-        [reference_tokens(refs) for refs in table.references],
+        [[vocab.prepare_tokens(r) for r in reference_tokens(refs)] for refs in table.references],
     )

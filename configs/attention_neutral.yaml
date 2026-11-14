@@ -1,0 +1,7 @@
+# M2 trained on gender-neutral captions (ADR-021) — the recommended Flickr8k model for the demo.
+# Uses its own vocabulary file (artifacts/vocab_neutral.json): run `captioner prepare` with this
+# config before training.
+defaults: [attention]
+name: attention_neutral
+vocab:
+  gender_neutral: true

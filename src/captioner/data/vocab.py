@@ -55,6 +55,7 @@ class Vocabulary:
     max_len: int
     sha256_manifest: str = ""
     built_from: str = "train"
+    text_transform: str = "none"
     stoi: dict[str, int] = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
@@ -107,6 +108,14 @@ class Vocabulary:
             words.append(self.itos[i])
         return words
 
+    def prepare_tokens(self, tokens: Sequence[str]) -> list[str]:
+        """Apply this vocabulary's text transform (e.g. gender-neutral wording) to tokens."""
+        if self.text_transform == "gender_neutral":
+            from captioner.data.neutral import neutralize_tokens
+
+            return neutralize_tokens(tokens)
+        return list(tokens)
+
     def to_dict(self) -> dict[str, Any]:
         """JSON-serialisable representation (database.md §3.2)."""
         return {
@@ -118,6 +127,7 @@ class Vocabulary:
             "itos": list(self.itos),
             "freqs": dict(self.freqs),
             "sha256_manifest": self.sha256_manifest,
+            "text_transform": self.text_transform,
         }
 
     def to_json(self) -> str:
@@ -147,6 +157,7 @@ class Vocabulary:
             max_len=int(data["max_len"]),
             sha256_manifest=str(data.get("sha256_manifest", "")),
             built_from=str(data.get("built_from", "train")),
+            text_transform=str(data.get("text_transform", "none")),
         )
 
     @classmethod
@@ -165,6 +176,7 @@ def build_vocab(
     max_len: int,
     sha256_manifest: str = "",
     built_from: str = "train",
+    text_transform: str = "none",
 ) -> Vocabulary:
     """Count words and keep those with frequency ≥ ``min_freq``.
 
@@ -177,6 +189,8 @@ def build_vocab(
         max_len: Maximum encoded length including ``<start>``/``<end>``.
         sha256_manifest: Hash of the source manifest, stored for integrity checks.
         built_from: Name of the split the counts come from.
+        text_transform: ``"none"`` or ``"gender_neutral"``; recorded so every later stage
+            transforms captions the same way.
 
     Returns:
         The vocabulary.
@@ -194,4 +208,5 @@ def build_vocab(
         max_len=max_len,
         sha256_manifest=sha256_manifest,
         built_from=built_from,
+        text_transform=text_transform,
     )
