@@ -14,8 +14,7 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 
 from captioner.config import Config
-from captioner.data.download import raw_layout
-from captioner.data.manifest import list_images
+from captioner.data.sources import feature_entries
 from captioner.data.transforms import load_image
 from captioner.models.encoder import ResNetEncoder
 from captioner.utils.device import get_device
@@ -34,20 +33,19 @@ class FeatureFileError(ValueError):
 class ImageFolderDataset(Dataset[torch.Tensor]):
     """Images in a fixed order, preprocessed with the shared ``load_image``."""
 
-    def __init__(self, image_dir: Path, names: Sequence[str]) -> None:
-        self.image_dir = image_dir
-        self.names = list(names)
+    def __init__(self, paths: Sequence[Path]) -> None:
+        self.paths = list(paths)
 
     def __len__(self) -> int:
-        return len(self.names)
+        return len(self.paths)
 
     def __getitem__(self, i: int) -> torch.Tensor:
-        return load_image(self.image_dir / self.names[i])
+        return load_image(self.paths[i])
 
 
 def feature_paths(cfg: Config) -> dict[FeatureKind, Path]:
     """Paths of the pooled and spatial feature files for a config."""
-    base = cfg.paths.features_dir
+    base = cfg.features_dir
     name = cfg.encoder.name
     return {"pooled": base / f"{name}_pooled.h5", "spatial": base / f"{name}_spatial.h5"}
 
@@ -73,9 +71,7 @@ def _create(
             chunks=(1, regions, c),
             compression="lzf",
         )
-    fh.create_dataset(
-        "image_ids", data=[n.removesuffix(".jpg") for n in names], dtype=h5py.string_dtype()
-    )
+    fh.create_dataset("image_ids", data=list(names), dtype=h5py.string_dtype())
     fh.attrs.update(
         {
             "encoder": cfg.encoder.name,
@@ -104,11 +100,11 @@ def extract_features(cfg: Config, device: torch.device | None = None) -> dict[Fe
         ``{"pooled": path, "spatial": path}``.
     """
     device = device or get_device()
-    image_dir = raw_layout(cfg).image_dir
-    names = list_images(image_dir)
+    entries = feature_entries(cfg)
+    names = [image_id for image_id, _ in entries]
     encoder = ResNetEncoder(cfg.encoder.weights).to(device).eval()
     loader = DataLoader(
-        ImageFolderDataset(image_dir, names),
+        ImageFolderDataset([path for _, path in entries]),
         batch_size=cfg.encoder.batch_size,
         num_workers=cfg.encoder.num_workers,
         shuffle=False,

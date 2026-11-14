@@ -19,6 +19,7 @@ from captioner.config import Config, load_config
 from captioner.data.download import raw_layout
 from captioner.data.manifest import ManifestError, check_invariants, list_images
 from captioner.data.prepare import load_prepared
+from captioner.data.sources import feature_entries
 from captioner.features.extract import FeatureFileError, feature_paths, validate_feature_file
 from captioner.utils.io import file_digest
 
@@ -71,7 +72,7 @@ def verify_prepared(cfg: Config, failures: list[str]) -> None:
 
 
 def verify_features(cfg: Config, failures: list[str]) -> None:
-    images = list_images(raw_layout(cfg).image_dir)
+    images = [image_id for image_id, _ in feature_entries(cfg)]
     for kind, path in feature_paths(cfg).items():
         if not path.exists():
             console.print(f"[yellow]SKIP[/] {path.name} not built yet")

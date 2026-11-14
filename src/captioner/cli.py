@@ -58,10 +58,10 @@ def version() -> None:
 @app.command()
 def download(config: ConfigOpt = DEFAULT_CONFIG) -> None:
     """Download Flickr8k, verify MD5s and extract into data/raw."""
-    from captioner.data.download import download_flickr8k
+    from captioner.data.download import download_dataset
 
-    layout = download_flickr8k(_load(config))
-    console.print(f"[green]Data ready[/] images={layout.image_dir} text={layout.text_dir}")
+    images = download_dataset(_load(config))
+    console.print(f"[green]Data ready[/] images under {images}")
 
 
 @app.command()
@@ -72,7 +72,7 @@ def prepare(config: ConfigOpt = DEFAULT_CONFIG) -> None:
     cfg = _load(config)
     out = prepare_data(cfg)
     console.print(
-        f"[green]Manifest[/] {len(out.manifest)} rows → {cfg.paths.manifest_path}\n"
+        f"[green]Manifest[/] {len(out.manifest)} rows → {cfg.manifest_file}\n"
         f"[green]Vocab[/] {out.vocab.n_words} words + 4 specials → {cfg.vocab_file}"
     )
 

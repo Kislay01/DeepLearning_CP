@@ -9,6 +9,7 @@ import pandas as pd
 
 from captioner.config import Config
 from captioner.data.download import raw_layout
+from captioner.data.karpathy import build_karpathy_manifest
 from captioner.data.manifest import (
     build_manifest,
     check_invariants,
@@ -53,16 +54,23 @@ def build_vocab_from_manifest(
 
 def prepare_data(cfg: Config) -> PreparedData:
     """Build and save ``manifest.parquet`` and ``vocab.json`` from the extracted raw data."""
-    layout = raw_layout(cfg)
+    from captioner.data.sources import karpathy_sources
+
     ds = cfg.dataset
-    df = build_manifest(
-        image_dir=layout.image_dir,
-        token_file=layout.text_dir / ds.token_file,
-        split_files={s: layout.text_dir / f for s, f in ds.split_files.items()},
-        n_captions=ds.captions_per_image,
-    )
+    if ds.kind == "karpathy":
+        df = build_karpathy_manifest(
+            karpathy_sources(cfg), cfg.paths.raw_dir, ds.captions_per_image
+        )
+    else:
+        layout = raw_layout(cfg)
+        df = build_manifest(
+            image_dir=layout.image_dir,
+            token_file=layout.text_dir / ds.token_file,
+            split_files={s: layout.text_dir / f for s, f in ds.split_files.items()},
+            n_captions=ds.captions_per_image,
+        )
     check_invariants(df, n_captions=ds.captions_per_image)
-    sha = save_manifest(df, cfg.paths.manifest_path)
+    sha = save_manifest(df, cfg.manifest_file)
     vocab = build_vocab_from_manifest(
         df, cfg.vocab.min_freq, cfg.vocab.max_len, cfg.vocab.gender_neutral
     )
@@ -78,7 +86,7 @@ def prepare_data(cfg: Config) -> PreparedData:
 
 def load_prepared(cfg: Config) -> PreparedData:
     """Load manifest + vocab and check the vocab was built from this exact manifest."""
-    df = load_manifest(cfg.paths.manifest_path)
+    df = load_manifest(cfg.manifest_file)
     vocab = Vocabulary.load(cfg.vocab_file)
     sha = manifest_sha256(df)
     if vocab.sha256_manifest != sha:

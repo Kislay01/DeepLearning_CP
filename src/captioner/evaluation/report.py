@@ -20,7 +20,7 @@ from PIL import Image
 
 from captioner.config import Config
 from captioner.data.dataset import CaptionTable
-from captioner.data.download import raw_layout
+from captioner.data.sources import image_root
 from captioner.data.vocab import Vocabulary
 from captioner.evaluation.metrics import METRIC_KEYS, CocoResult
 from captioner.inference.decode import Hypothesis
@@ -42,8 +42,8 @@ def _img_tag(img: Image.Image, alt: str, fmt: str = "JPEG") -> str:
     return f'<img src="data:image/{mime};base64,{data}" alt="{html.escape(alt)}" width="224">'
 
 
-def _thumb(image_dir: Path, image_id: str, alt: str) -> str:
-    path = image_dir / f"{image_id}.jpg"
+def _thumb(image_dir: Path, file_name: str, alt: str) -> str:
+    path = image_dir / file_name
     if not path.exists():
         return "<em>image not available</em>"
     with Image.open(path) as img:
@@ -53,7 +53,7 @@ def _thumb(image_dir: Path, image_id: str, alt: str) -> str:
 def _card(image_dir: Path, table: CaptionTable, i: int, text: str, res: CocoResult) -> str:
     refs = "".join(f"<li>{html.escape(r)}</li>" for r in table.references[i])
     return (
-        f'<div class="card">{_thumb(image_dir, table.image_ids[i], text)}<div>'
+        f'<div class="card">{_thumb(image_dir, table.file_names[i], text)}<div>'
         f'<div class="pred">{html.escape(text)}</div>'
         f'<div class="meta">{html.escape(table.image_ids[i])} · CIDEr {res.cider_per_image[i]:.3f}'
         f" · BLEU-4 {res.bleu4_per_image[i]:.3f}</div><ol>{refs}</ol></div></div>"
@@ -61,12 +61,12 @@ def _card(image_dir: Path, table: CaptionTable, i: int, text: str, res: CocoResu
 
 
 def _attention_figure(
-    image_dir: Path, image_id: str, words: list[str], hyp: Hypothesis, side: int
+    image_dir: Path, image_id: str, file_name: str, words: list[str], hyp: Hypothesis, side: int
 ) -> str:
     if hyp.attention is None or not words:
         return ""
     grids = [attention_grid(a, side) for a in hyp.attention][:12]
-    with Image.open(image_dir / f"{image_id}.jpg") as img:
+    with Image.open(image_dir / file_name) as img:
         view = img.convert("RGB")
         cols = min(6, len(grids))
         rows = (len(grids) + cols - 1) // cols
@@ -109,7 +109,7 @@ def write_samples_html(
     beam: int,
 ) -> None:
     """Write the qualitative report for one beam width."""
-    image_dir = raw_layout(cfg).image_dir
+    image_dir = image_root(cfg)
     order = sorted(range(len(texts)), key=lambda i: result.cider_per_image[i])
     rng = random.Random(cfg.seed)
     picks = rng.sample(range(len(texts)), min(cfg.eval.n_random, len(texts)))
@@ -126,7 +126,14 @@ def write_samples_html(
     div = _table(["statistic", "value"], [[k2, _fmt(v)] for k2, v in beam_res["diversity"].items()])
     side = round(cfg.model.num_regions**0.5)
     att = "".join(
-        _attention_figure(image_dir, table.image_ids[i], vocab.decode(hyps[i].ids), hyps[i], side)
+        _attention_figure(
+            image_dir,
+            table.image_ids[i],
+            table.file_names[i],
+            vocab.decode(hyps[i].ids),
+            hyps[i],
+            side,
+        )
         for i in picks[: cfg.eval.n_attention]
     )
     sections = [
