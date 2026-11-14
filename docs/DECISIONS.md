@@ -64,8 +64,8 @@ Format: context → decision → consequence. Numbered in the order they were ta
 - **Decision:** `reg = alpha_c · mean_b mean_i (1 − Σ_t α_{t,i})²`, with `alpha_c = 1.0` from config. Attention weights on padded steps are zeroed before the sum over t.
 - **Consequence:** the term equals the doc formula scaled by 1/L. To use the literal sum, set `model.alpha_c: 49.0`. Ablation A1 (`alpha_c: 0`) is unaffected.
 
-## ADR-011 — M2 has 12.2 M trainable parameters, not "≈ 8–9 M"
+## ADR-011 — M2 has 12.18 M trainable parameters, not "≈ 8–9 M"
 
-- **Context:** `architecture.md` §5.3 estimates ≈ 8–9 M trainable parameters for M2 with V ≈ 2.5 k. Counting the layers it specifies (E = 256, D = 512, A = 512, C = 2048, V = 2,533) gives 12,229,862. Most of the gap is the `LSTMCell` input `[E(y); z_t]`, which includes the 2,048-d context: `4·512·(256+2048)` ≈ 4.7 M weights alone.
-- **Decision:** keep the documented dimensions and treat the doc's count as an estimate error. `test_parameter_counts_match_architecture` asserts the exact analytic count for M2 (12,229,862) and M1 (2,416,101).
+- **Context:** `architecture.md` §5.3 estimates ≈ 8–9 M trainable parameters for M2 with V ≈ 2.5 k. Counting the layers it specifies (E = 256, D = 512, A = 512, C = 2048, V = 2,533) gives 12,180,198. Most of the gap is the `LSTMCell` input `[E(y); z_t]`, which includes the 2,048-d context: `4·512·(256+2048)` ≈ 4.7 M weights alone.
+- **Decision:** keep the documented dimensions and treat the doc's count as an estimate error. `test_parameter_counts_match_architecture` asserts the exact analytic count for M2 (12,180,198) and M1 (2,416,101).
 - **Consequence:** still fits easily on a T4 (≈ 49 MB fp32 weights). Checkpoints will be ~50 MB rather than the ~35 MB guessed in `database.md` §1; the release file stays out of git either way.
