@@ -170,6 +170,8 @@ class EvalConfig(_Strict):
     n_taxonomy: int = 100
     source: str | None = None  # evaluate only one source of a combined dataset (ADR-023)
     tag: str | None = None  # suffix for the report folder (e.g. decoding ablations)
+    clipscore: bool = False  # ADR-028: add CLIP-S / RefCLIP-S (downloads CLIP ViT-B/32)
+    clipscore_weights: str | None = "openai"
     reliability_centroids: int = Field(64, ge=1)  # ADR-022
     ood_quantile: float = Field(0.99, gt=0.0, lt=1.0)
     confidence_quantile: float = Field(0.10, gt=0.0, lt=1.0)

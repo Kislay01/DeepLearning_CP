@@ -23,6 +23,19 @@ keyboard- and screen-reader-friendly Streamlit app that tells you when it is uns
 | Unfamiliar photos still get confident-sounding captions | A calibrated **out-of-domain detector** (k-means over training features, 99th-percentile threshold on validation) and a calibrated confidence threshold ship with each model; the UI warns, and the *spoken* caption is hedged ("Possibly: …"); evaluation checks that flagged captions really score lower | ADR-022 |
 | Speech went to Google's unofficial gTTS endpoint | **Local neural TTS (Piper)** by default — pinned, SHA-256-verified voice, runs in-process, works with no network (proved in CI with `--network none`); gTTS is opt-in only and labelled | ADR-020 |
 
+### Deep-learning upgrades beyond the blueprint
+
+| Upgrade | Why it matters | Where |
+|---|---|---|
+| Model selection on **CIDEr-D** (own implementation, identical to pycocoevalcap) | CIDEr correlates with human judgement far better than BLEU-4 | ADR-025 |
+| **Label smoothing**, **AdamW** (decay groups), **cosine schedule with warmup**, **EMA** weights | Standard modern recipe: better-calibrated, less generic captions and smoother optimisation | ADR-025 |
+| **Self-critical sequence training** (CIDEr-D reward, leave-one-out baseline) | Removes exposure bias and optimises the metric directly; the largest documented gain for captioners | ADR-026 · `configs/coco_clip_scst.yaml` |
+| **Transformer decoder** (M3, pre-norm, tied embeddings, grid encoder) | The modern alternative to the LSTM; shares decoding, heat-maps and serving | ADR-027 · `configs/coco_clip_transformer.yaml` |
+| **CLIPScore / RefCLIPScore** | Reference-free check that a caption is true of the image (catches hallucination) | ADR-028 |
+
+Recommended training path: `coco_clip.yaml` (XE) → `coco_clip_scst.yaml` (SCST), with
+`coco_clip_transformer.yaml` as the competing decoder.
+
 The original reference defects D1–D12 (no evaluation, "a" deleted, pickles, server-side audio, …)
 are fixed too. Each has a named regression test; see [`docs/TRACEABILITY.md`](docs/TRACEABILITY.md).
 

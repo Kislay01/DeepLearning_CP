@@ -32,3 +32,5 @@ train:
 encoder:
   batch_size: 64
   num_workers: 4
+eval:
+  clipscore: true          # ADR-028: reference-free CLIP-S / RefCLIP-S alongside CIDEr

@@ -28,7 +28,8 @@ references (`results.*.raw_references`, for comparison with the literature).
 | A2 | M2 vocab min_freq 1 | Flickr8k | beam 3 | not yet run | not yet run | not yet run | not yet run | not yet run | — |
 | A3 | M2 without repetition blocking | Flickr8k | beam 3 | not yet run | not yet run | not yet run | not yet run | not yet run | — |
 
-E1 and E4 should be reported as mean ± std over 3 seeds (42, 1, 2).
+E1 and E4 should be reported as mean ± std over 3 seeds (42, 1, 2). COCO runs also report
+**CLIP-S** and **RefCLIP-S** (`results.beam_N["CLIP-S"]`, ADR-028); add them to the table when filled.
 
 ## Bias, hallucination and reliability (main beam)
 

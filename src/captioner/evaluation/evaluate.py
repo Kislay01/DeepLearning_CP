@@ -144,6 +144,7 @@ def evaluate_run(
     main: tuple[list[Hypothesis], list[str], CocoResult] | None = None
     d = cfg.decode  # decoding is an inference-time choice: taken from the current config
     repeat = build_repeat_policy(run.vocab.itos, d.no_repeat_ngram, d.block_repeated_words)
+    clip_images, scorer = _clip_setup(cfg, table, device)
     for beam in beams:
         dec = beam_decoder(beam, d.max_len, d.length_alpha, repeat)
         hyps = decode_split(model, loader, device, dec)
@@ -160,6 +161,11 @@ def evaluate_run(
             "failure_taxonomy": taxonomy_counts(texts[:n_tax], score_refs[:n_tax]),
             "failure_taxonomy_n_images": n_tax,
         }
+        if scorer is not None and clip_images is not None:
+            clip = scorer.score(clip_images, texts, refs)
+            results[f"beam_{beam}"].update(
+                {"CLIP-S": clip["CLIP-S"], "RefCLIP-S": clip["RefCLIP-S"]}
+            )
         rows += _rows(table, split, beam, texts, res)
         logger.info("beam %d: %s", beam, {k: res.corpus[k] for k in METRIC_KEYS})
         if beam == main_beam:
@@ -227,3 +233,15 @@ def _reliability_check(
         "cider_flagged": mean([c for c, f in zip(cider, flagged, strict=True) if f]),
         "cider_unflagged": mean([c for c, f in zip(cider, flagged, strict=True) if not f]),
     }
+
+
+def _clip_setup(
+    cfg: Config, table: CaptionTable, device: torch.device
+) -> tuple[torch.Tensor | None, Any]:
+    if not cfg.eval.clipscore:
+        return None, None
+    from captioner.evaluation.clipscore import ClipScorer
+
+    scorer = ClipScorer(cfg.eval.clipscore_weights, device)
+    root = image_root(cfg)
+    return scorer.embed_images([root / f for f in table.file_names]), scorer
