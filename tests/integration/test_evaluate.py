@@ -80,3 +80,17 @@ def test_full_cli_pipeline(tmp_path: Path) -> None:
     assert "Model card" in (tmp_path / "rel" / "model_card.md").read_text()
     assert "BLEU-4" in (tmp_path / "rel" / "model_card.md").read_text()
     assert runner.invoke(app, ["version"]).exit_code == 0
+
+
+def test_decoding_ablation_gets_its_own_report(
+    prepared_mini: Config, trained_runs: dict[str, Path]
+) -> None:
+    cfg = prepared_mini.with_overrides(
+        {
+            "eval": {"tag": "norepeat"},
+            "decode": {"no_repeat_ngram": 0, "block_repeated_words": False},
+        }
+    )
+    result = evaluate_run(cfg, trained_runs["merge"], beams=[1])
+    assert result.report_dir.name.endswith("-norepeat")
+    assert (result.report_dir / "metrics.json").exists()

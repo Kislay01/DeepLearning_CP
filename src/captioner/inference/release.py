@@ -109,6 +109,14 @@ def _metrics_table(metrics: dict[str, Any] | None) -> str:
     return "\n".join(lines) + f"\n\n{src}\n"
 
 
+_DATA_NOTES = {
+    "flickr8k": "Flickr8k (Hodosh, Young & Hockenmaier, JAIR 2013): 8,000 Flickr photos, "
+    "5 captions each, official split 6,000 / 1,000 / 1,000.",
+    "coco": "MS-COCO 2014 captions (Chen et al., 2015), Karpathy split 113k / 5k / 5k.",
+    "combined": "MS-COCO 2014 + Flickr30k + Flickr8k (Karpathy splits).",
+}
+
+
 def model_card(
     cfg: Config, meta: dict[str, Any], vocab: Vocabulary, metrics: dict[str, Any] | None
 ) -> str:
@@ -117,6 +125,7 @@ def model_card(
     tuned = " with fine-tuned layer4" if cfg.train.finetune_encoder else ""
     bleu = meta.get("val_bleu4", float("nan"))
     exported = datetime.now(UTC).date().isoformat()
+    data = f"{cfg.dataset.name}, text transform `{vocab.text_transform}`"
     return f"""# Model card — captioner {__version__}
 
 - **Model:** {kind} over ResNet-50 (`{cfg.encoder.weights}`) features{tuned}.
@@ -126,9 +135,9 @@ def model_card(
   sha256 `{vocab.sha256()[:16]}…`
 
 ## Data
-Flickr8k (Hodosh, Young & Hockenmaier, JAIR 2013): 8,000 Flickr photos of people and animals,
-5 English captions each; official split 6,000 / 1,000 / 1,000. Images are licensed for
-**non-commercial research and education only**; this model inherits that restriction.
+{_DATA_NOTES.get(cfg.dataset.name, cfg.dataset.name)}
+Images are licensed for **non-commercial research and education only**; this model inherits
+that restriction. Encoder: `{cfg.encoder.name}`. Speech voice: Piper `{cfg.tts.model_file}`.
 
 ## Metrics
 {_metrics_table(metrics)}
@@ -137,13 +146,16 @@ Research and teaching demo of image captioning with speech output. Not a certifi
 device: do not market or rely on it as an accessibility product without user testing.
 
 ## Limitations and biases
-- Trained on 8k photos dominated by people and dogs in Western, outdoor scenes; other content is
-  often described generically or wrongly.
-- Captions can assume gender or age from appearance ("a man", "a girl") and can hallucinate
-  objects, colours and counts.
+- Coverage follows the training data ({data}); photos unlike it are flagged by the calibrated
+  out-of-domain detector shipped as `reliability.safetensors` (when present) rather than trusted.
+- People are described without gender: training targets can be neutralised
+  (`vocab.gender_neutral`) and served captions are always rewritten to neutral wording;
+  evaluation reports the model's own gender word, error and guess rates.
+- Captions can still hallucinate objects, colours and counts; repeated n-grams and repeated
+  content words are blocked at decoding and low-confidence captions are flagged and spoken
+  with hedging.
 - Training-time horizontal flips (fine-tuning only) can confuse "left"/"right".
-- English only; maximum 23 words per caption.
-- Not for safety-critical use.
+- English only; maximum 23 words per caption. Not for safety-critical use.
 """
 
 
