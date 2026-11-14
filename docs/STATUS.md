@@ -1,12 +1,12 @@
 # Status
 
-Last updated: M1 (data pipeline).
+Last updated: M2 (preprocessing & features).
 
 | Milestone | Branch | State | Notes |
 |---|---|---|---|
 | M0 Scaffold | `feat/scaffold` | done | pyproject + uv.lock, package layout, Makefile, pre-commit, CI, base config, docs |
 | M1 Data pipeline | `feat/data` | done | Full data verified: MD5s match, 40,000 rows, 6000/1000/1000, orphan dropped, vocab 2,529 + 4 (7,333 distinct train words), train p99 = 22 words |
-| M2 Preprocessing & features | `feat/features` | not started | |
+| M2 Preprocessing & features | `feat/features` | done (code + tests) | Verified on mini data with random-init ResNet-50. **Full 8,091-image extraction not run here**: IMAGENET1K_V2 weights are unreachable from the sandbox (ADR-009). Run `make features` on Colab/Kaggle. |
 | M3 Models | `feat/models` | not started | |
 | M4 Training | `feat/training` | not started | |
 | M5 Decoding & evaluation | `feat/eval` | not started | |
