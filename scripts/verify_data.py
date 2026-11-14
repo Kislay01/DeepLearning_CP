@@ -2,7 +2,7 @@
 
 Checks: raw archive MD5s, manifest invariants (40,000 rows, 6000/1000/1000 images, disjoint
 splits, 5 captions each, orphan id dropped, one feature row per image), vocab = 2,529 words +
-4 specials built from train.
+4 specials built from train, and — if present — the feature HDF5 files (8,091 rows, ids match).
 
 Usage: uv run python scripts/verify_data.py [--config configs/base.yaml] [--skip-md5]
 Exit code 0 when everything matches, 1 otherwise.
@@ -19,6 +19,7 @@ from captioner.config import Config, load_config
 from captioner.data.download import raw_layout
 from captioner.data.manifest import ManifestError, check_invariants, list_images
 from captioner.data.prepare import load_prepared
+from captioner.features.extract import FeatureFileError, feature_paths, validate_feature_file
 from captioner.utils.io import file_digest
 
 EXPECTED_IMAGES = {"train": 6000, "val": 1000, "test": 1000}
@@ -69,6 +70,19 @@ def verify_prepared(cfg: Config, failures: list[str]) -> None:
     _check(vocab["a"] != 3 and vocab.freqs.get("a", 0) > 40_000, "article 'a' kept (D2)", failures)
 
 
+def verify_features(cfg: Config, failures: list[str]) -> None:
+    images = list_images(raw_layout(cfg).image_dir)
+    for kind, path in feature_paths(cfg).items():
+        if not path.exists():
+            console.print(f"[yellow]SKIP[/] {path.name} not built yet")
+            continue
+        try:
+            validate_feature_file(path, images, kind)
+            _check(True, f"{path.name}: {len(images)} rows, float16, ids match", failures)
+        except FeatureFileError as exc:
+            _check(False, str(exc), failures)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", default="configs/base.yaml")
@@ -79,6 +93,7 @@ def main() -> int:
     if not args.skip_md5:
         verify_archives(cfg, failures)
     verify_prepared(cfg, failures)
+    verify_features(cfg, failures)
     console.print(
         f"\n{'All checks passed' if not failures else f'{len(failures)} check(s) failed'}"
     )

@@ -54,5 +54,16 @@ def prepare(config: ConfigOpt = DEFAULT_CONFIG) -> None:
     )
 
 
+@app.command()
+def extract(config: ConfigOpt = DEFAULT_CONFIG, device: str | None = None) -> None:
+    """Extract frozen ResNet-50 features (pooled + spatial) for every image to HDF5."""
+    from captioner.features.extract import extract_features
+    from captioner.utils.device import get_device
+
+    paths = extract_features(_load(config), get_device(device))
+    for kind, path in paths.items():
+        console.print(f"[green]{kind}[/] → {path}")
+
+
 if __name__ == "__main__":  # pragma: no cover
     app()
