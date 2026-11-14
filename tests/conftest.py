@@ -1,0 +1,63 @@
+"""Shared fixtures. Everything runs on CPU against tests/fixtures/mini_flickr."""
+
+from __future__ import annotations
+
+import os
+import shutil
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from captioner.config import Config, load_config
+
+ROOT = Path(__file__).resolve().parents[1]
+MINI = ROOT / "tests" / "fixtures" / "mini_flickr"
+MINI_COUNTS = {"train": 12, "val": 4, "test": 4}
+
+os.environ.setdefault("CAPTIONER_DEVICE", "cpu")
+os.environ.setdefault("MPLBACKEND", "Agg")
+
+# Small, fast settings for unit/integration tests (no pretrained weights, tiny decoder).
+TEST_OVERRIDES: dict[str, Any] = {
+    "vocab": {"min_freq": 1},
+    "encoder": {"weights": None, "batch_size": 4, "num_workers": 0},
+    "model": {"embed_dim": 16, "decoder_dim": 32, "attention_dim": 16, "dropout": 0.0},
+    "train": {
+        "batch_size": 4,
+        "epochs": 2,
+        "num_workers": 0,
+        "amp": False,
+        "log_samples": 2,
+        "patience": 5,
+    },
+    "decode": {"beam": 2},
+    "eval": {"beams": [1, 2], "n_random": 2, "n_best_worst": 2, "n_attention": 2, "n_taxonomy": 4},
+}
+
+
+def make_config(tmp_path: Path, extra: dict[str, Any] | None = None) -> Config:
+    """Base config pointed at ``tmp_path`` with the test overrides applied."""
+    paths = {
+        "paths": {
+            "data_dir": str(tmp_path / "data"),
+            "artifacts_dir": str(tmp_path / "artifacts"),
+            "reports_dir": str(tmp_path / "reports"),
+            "mlruns_dir": str(tmp_path / "mlruns"),
+        }
+    }
+    cfg = load_config(ROOT / "configs" / "base.yaml", overrides=paths)
+    cfg = cfg.with_overrides(TEST_OVERRIDES)
+    return cfg.with_overrides(extra) if extra else cfg
+
+
+def install_mini_raw(cfg: Config) -> None:
+    """Copy the mini fixture into ``cfg.paths.raw_dir`` as if it had been extracted."""
+    shutil.copytree(MINI, cfg.paths.raw_dir, dirs_exist_ok=True)
+
+
+@pytest.fixture
+def mini_cfg(tmp_path: Path) -> Config:
+    cfg = make_config(tmp_path)
+    install_mini_raw(cfg)
+    return cfg
