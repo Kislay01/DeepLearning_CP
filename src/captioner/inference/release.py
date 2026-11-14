@@ -5,12 +5,16 @@
 from __future__ import annotations
 
 import json
+import logging
+import shutil
+import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import torch
 import yaml
+from pydantic import BaseModel, ConfigDict
 from safetensors.torch import load_file, save_file
 
 from captioner import __version__
@@ -22,6 +26,8 @@ from captioner.models.captioner import build_model
 from captioner.models.encoder import ResNetEncoder
 from captioner.training.checkpoint import load_run
 from captioner.utils.io import file_digest, read_json
+
+logger = logging.getLogger(__name__)
 
 RELEASE_FILES = ("model.safetensors", "vocab.json", "config.yaml", "model_card.md")
 _ENCODER_PREFIX = "encoder."
@@ -68,6 +74,12 @@ def export_run(run_dir: Path, out_dir: Path, metrics_path: Path | None = None) -
     (out_dir / "model_card.md").write_text(model_card(cfg, meta, vocab, metrics), encoding="utf-8")
     sums = {name: file_digest(out_dir / name) for name in RELEASE_FILES}
     (out_dir / "checksums.json").write_text(json.dumps(sums, indent=2) + "\n", encoding="utf-8")
+    spec = {"version": __version__, "base_url": None, "files": sums}
+    (out_dir / "release.yaml").write_text(
+        "# Copy into configs/release.yaml after uploading the files; set base_url.\n"
+        + yaml.safe_dump(spec, sort_keys=False),
+        encoding="utf-8",
+    )
     return sums
 
 
@@ -165,3 +177,54 @@ def load_release(release_dir: Path, device: torch.device | None = None) -> Predi
     if enc_state:
         encoder.load_state_dict(enc_state)
     return Predictor(decoder, vocab, cfg, encoder, device)
+
+
+class ReleaseSpec(BaseModel):
+    """``configs/release.yaml``: where the serving model is published and its pinned hashes."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    version: str
+    base_url: str | None = None
+    files: dict[str, str] = {}
+
+    @property
+    def is_published(self) -> bool:
+        return bool(self.base_url) and set(RELEASE_FILES) <= set(self.files)
+
+
+def load_release_spec(path: Path) -> ReleaseSpec:
+    """Read and validate ``configs/release.yaml``."""
+    with path.open(encoding="utf-8") as fh:
+        return ReleaseSpec.model_validate(yaml.safe_load(fh) or {})
+
+
+def fetch_release(spec: ReleaseSpec, cache_dir: Path, timeout: float = 60.0) -> Path:
+    """Download a pinned release into ``cache_dir/<version>`` and verify every SHA-256.
+
+    Files already cached with the right hash are reused. A mismatching download is deleted and
+    the function raises, so an unverified file is never loaded.
+
+    Raises:
+        ReleaseError: If the spec is incomplete or any hash differs.
+    """
+    if not spec.is_published or spec.base_url is None:
+        raise ReleaseError("configs/release.yaml has no published release (base_url/files)")
+    dest = cache_dir / spec.version
+    dest.mkdir(parents=True, exist_ok=True)
+    for name in RELEASE_FILES:
+        target, expected = dest / name, spec.files[name]
+        if target.exists() and file_digest(target) == expected:
+            continue
+        part = target.with_name(name + ".part")
+        url = f"{spec.base_url.rstrip('/')}/{name}"
+        logger.info("Downloading %s", url)
+        with urllib.request.urlopen(url, timeout=timeout) as resp, part.open("wb") as out:
+            shutil.copyfileobj(resp, out, 1 << 20)
+        if file_digest(part) != expected:
+            part.unlink()
+            raise ReleaseError(f"SHA-256 mismatch for {url}; refusing to load it")
+        part.replace(target)
+    sums = {name: spec.files[name] for name in RELEASE_FILES}
+    (dest / "checksums.json").write_text(json.dumps(sums, indent=2) + "\n", encoding="utf-8")
+    return dest

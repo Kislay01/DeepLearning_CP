@@ -18,7 +18,7 @@ from PIL import Image
 from captioner import __version__
 from captioner.inference.heatmap import attention_summary, overlay
 from captioner.inference.predictor import Caption, Predictor
-from captioner.inference.release import load_release
+from captioner.inference.release import ReleaseError, fetch_release, load_release, load_release_spec
 from captioner.training.checkpoint import CheckpointError, latest_run
 
 logger = logging.getLogger(__name__)
@@ -46,7 +46,8 @@ def resolve_model_source(artifacts_dir: Path | None = None) -> ModelSource:
     """Pick the model to serve.
 
     Order: ``CAPTIONER_RELEASE_DIR`` → ``CAPTIONER_RUN_DIR`` → ``<artifacts>/release/<version>``
-    → newest run under ``<artifacts>/runs``.
+    → the pinned release in ``configs/release.yaml`` (downloaded + SHA-256 verified into
+    ``CAPTIONER_CACHE_DIR``) → newest run under ``<artifacts>/runs``.
 
     Raises:
         ModelNotLoadedError: If nothing is found.
@@ -59,6 +60,8 @@ def resolve_model_source(artifacts_dir: Path | None = None) -> ModelSource:
     release = root / "release" / __version__
     if (release / "model.safetensors").exists():
         return ModelSource("release", release)
+    if (published := _published_release()) is not None:
+        return ModelSource("release", published)
     try:
         return ModelSource("run", latest_run(root / "runs"))
     except CheckpointError as exc:
@@ -103,3 +106,17 @@ def build_heatmaps(image: Image.Image, caption: Caption, max_words: int) -> Heat
     words = list(caption.tokens[:max_words])
     grids = list(caption.attention[:max_words])
     return Heatmaps([overlay(image, g) for g in grids], words, attention_summary(words, grids))
+
+
+def _published_release() -> Path | None:
+    spec_path = Path(os.environ.get("CAPTIONER_RELEASE_CONFIG", "configs/release.yaml"))
+    if not spec_path.exists():
+        return None
+    spec = load_release_spec(spec_path)
+    if not spec.is_published:
+        return None
+    cache = Path(os.environ.get("CAPTIONER_CACHE_DIR", Path.home() / ".cache" / "captioner"))
+    try:
+        return fetch_release(spec, cache)
+    except (ReleaseError, OSError) as exc:
+        raise ModelNotLoadedError(f"Could not fetch the pinned model release: {exc}") from exc
