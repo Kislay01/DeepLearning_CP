@@ -1,0 +1,92 @@
+# Base configuration. Experiment configs inherit it with `defaults: [base]`.
+# Every path is relative to the working directory and can be overridden with
+# CAPTIONER_DATA_DIR / CAPTIONER_ARTIFACTS_DIR / CAPTIONER_REPORTS_DIR / CAPTIONER_MLRUNS_DIR.
+name: base
+seed: 42
+
+paths:
+  data_dir: data
+  artifacts_dir: artifacts
+  reports_dir: reports
+  mlruns_dir: mlruns
+
+dataset:
+  name: flickr8k
+  split_source: official
+  images_url: https://github.com/jbrownlee/Datasets/releases/download/Flickr8k/Flickr8k_Dataset.zip
+  images_md5: f18a1e2920de5bd84dae7cf08ec78978
+  images_bytes: 1115419746
+  text_url: https://github.com/jbrownlee/Datasets/releases/download/Flickr8k/Flickr8k_text.zip
+  text_md5: bf6c1abcb8e4a833b7f922104de18627
+  text_bytes: 2340801
+  image_dir_name: Flicker8k_Dataset
+  text_dir_name: Flickr8k_text
+  token_file: Flickr8k.token.txt
+  split_files:
+    train: Flickr_8k.trainImages.txt
+    val: Flickr_8k.devImages.txt
+    test: Flickr_8k.testImages.txt
+  captions_per_image: 5
+
+vocab:
+  min_freq: 5
+  max_len: 25
+
+encoder:
+  name: resnet50
+  weights: IMAGENET1K_V2
+  resize: 256
+  image_size: 224
+  batch_size: 32
+  num_workers: 2
+
+model:
+  kind: attention
+  embed_dim: 256
+  decoder_dim: 512
+  attention_dim: 512
+  encoder_dim: 2048
+  num_regions: 49
+  dropout: 0.5
+  alpha_c: 1.0
+
+train:
+  batch_size: 64
+  captions_per_image: 1
+  lr: 4.0e-4
+  weight_decay: 0.0
+  epochs: 30
+  patience: 5
+  lr_factor: 0.5
+  lr_patience: 2
+  grad_clip: 5.0
+  amp: true
+  num_workers: 2
+  val_beam: 1
+  log_samples: 8
+  max_steps_per_epoch: null
+  finetune_encoder: false
+  encoder_lr: 1.0e-4
+
+decode:
+  beam: 3
+  length_alpha: 0.7
+  max_len: 25
+
+eval:
+  split: test
+  beams: [1, 3, 5]
+  n_random: 25
+  n_best_worst: 10
+  n_attention: 10
+  n_taxonomy: 100
+
+app:
+  max_upload_mb: 10
+  max_image_pixels: 40000000
+  max_side_px: 8000
+  inference_timeout_s: 10.0
+  tts_timeout_s: 5.0
+  cooldown_s: 2.0
+  low_confidence_logprob: -1.2
+  max_heatmap_words: 12
