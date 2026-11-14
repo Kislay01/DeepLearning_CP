@@ -121,7 +121,13 @@ def model_card(
     cfg: Config, meta: dict[str, Any], vocab: Vocabulary, metrics: dict[str, Any] | None
 ) -> str:
     """Markdown model card: data, metrics, limitations, biases (FR-11)."""
-    kind = "M2 soft-attention LSTM" if cfg.model.kind == "attention" else "M1 merge LSTM baseline"
+    kind = {
+        "attention": "M2 soft-attention LSTM",
+        "transformer": "M3 Transformer decoder",
+        "merge": "M1 merge LSTM baseline",
+    }[cfg.model.kind]
+    if cfg.train.objective == "scst":
+        kind += " (SCST, CIDEr-D reward)"
     tuned = " with fine-tuned layer4" if cfg.train.finetune_encoder else ""
     bleu = meta.get("val_bleu4", float("nan"))
     exported = datetime.now(UTC).date().isoformat()
