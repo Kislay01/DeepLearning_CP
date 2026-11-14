@@ -141,3 +141,13 @@ these ADRs win.
   3. `decode.gender_neutral_output: true` (default) rewrites the output of **any** model one-to-one, keeping attention maps aligned. Served captions never contain gendered words.
   4. Evaluation reports metrics against neutralised references (primary) and raw references (literature comparison), plus `fairness_model` (what the network itself says: gender word rate, gender error rate when references agree, gender guess rate when they don't) and `fairness_served`.
 - **Consequence:** the gender-guessing failure is removed from user-facing output and is measured rather than hidden. BLEU against raw references drops slightly for neutral models; both numbers are reported.
+
+## ADR-022 — Reliability: repetition blocking, calibrated confidence, out-of-domain detection
+
+- **Context:** small captioning models hallucinate, often by looping ("a dog and a dog") or by forcing a familiar template onto unfamiliar photos (screenshots, drawings, food, cities). A fixed log-prob threshold (`app.low_confidence_logprob`) isn't calibrated to any particular model.
+- **Decision:**
+  1. Decoding bans repeated trigrams (`decode.no_repeat_ngram: 3`) and repeated content words (`decode.block_repeated_words`). Both are vectorised over beams. Training-time validation, evaluation and serving use the same policy.
+  2. After training, `calibrate` fits spherical k-means (64 centroids) on train pooled features. The **out-of-domain** threshold is set at the 99th percentile of validation distances, and the **low-confidence** threshold at the 10th percentile of validation mean log-probs. Both are saved in `reliability.safetensors` (run folder and release) and loaded by `Predictor`.
+  3. `Caption.out_of_domain` / `low_confidence` drive the UI: a warning with an icon and words, plus hedged *spoken* wording ("Possibly: …", "This photo looks unusual for me, so I'm unsure…"), so blind users hear the uncertainty too.
+  4. Evaluation checks the calibration on test (`metrics.reliability`): flagged rate, and CIDEr of flagged vs unflagged captions. Diversity now includes `repeated_word_rate`.
+- **Consequence:** the model can't be made to know everything, but it now says when it is likely to be wrong, and the check that this signal works is part of every evaluation.

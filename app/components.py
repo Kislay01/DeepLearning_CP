@@ -50,6 +50,17 @@ class Result:
     heatmaps: Heatmaps | None
 
 
+def spoken_text(cap: Caption) -> str:
+    """What is read aloud: unreliable captions are hedged in words, not only by colour/icon."""
+    if not cap.text:
+        return ""
+    if cap.out_of_domain:
+        return f"This photo looks unusual for me, so I'm unsure. It might show: {cap.text}"
+    if cap.low_confidence:
+        return f"Possibly: {cap.text}"
+    return cap.text
+
+
 def header() -> None:
     st.title("Image Caption Generator")
     st.write("Describe a photo in words and speech.")
@@ -64,7 +75,12 @@ def caption_card(result: Result, autoplay: bool) -> None:
         st.image(result.image, caption=text, alt=text, width="stretch")
     with right:
         st.markdown(f"## {escape_markdown(text)}")
-        if cap.low_confidence:
+        if cap.out_of_domain:
+            st.warning(
+                "⚠ Unfamiliar kind of photo — it looks unlike the photos the model learned "
+                "from, so this description is likely to be wrong."
+            )
+        elif cap.low_confidence:
             st.warning("⚠ Low confidence — this description may be inaccurate.")
         else:
             st.success(f"✓ Caption ready · {cap.latency_s:.1f} s")

@@ -35,7 +35,7 @@ from captioner.evaluation.metrics import METRIC_KEYS, CocoResult, coco_scores
 from captioner.evaluation.report import write_samples_html
 from captioner.evaluation.taxonomy import diversity, taxonomy_counts
 from captioner.features.extract import feature_paths
-from captioner.inference.decode import Hypothesis
+from captioner.inference.decode import Hypothesis, build_repeat_policy
 from captioner.models.captioner import ImageCaptioner, feature_kind_for
 from captioner.models.encoder import ResNetEncoder
 from captioner.training.checkpoint import CheckpointError, LoadedRun, load_run
@@ -140,8 +140,10 @@ def evaluate_run(
     rows: list[dict[str, Any]] = []
     main_beam = cfg.decode.beam if cfg.decode.beam in beams else beams[-1]
     main: tuple[list[Hypothesis], list[str], CocoResult] | None = None
+    d = run.cfg.decode
+    repeat = build_repeat_policy(run.vocab.itos, d.no_repeat_ngram, d.block_repeated_words)
     for beam in beams:
-        dec = beam_decoder(beam, run.cfg.decode.max_len, run.cfg.decode.length_alpha)
+        dec = beam_decoder(beam, run.cfg.decode.max_len, run.cfg.decode.length_alpha, repeat)
         hyps = decode_split(model, loader, device, dec)
         raw_words, texts = _words(hyps, run)
         res = coco_scores(texts, score_refs)
@@ -178,6 +180,8 @@ def evaluate_run(
         "git_sha": git_sha(),
         "training_git_sha": run.meta.get("git_sha"),
     }
+    if main is not None and (run_dir / "reliability.safetensors").exists():
+        metrics["reliability"] = _reliability_check(cfg, run_dir, table, main[0], main[2])
     write_json(metrics, report_dir / "metrics.json")
     pd.DataFrame(rows).to_csv(report_dir / "predictions.csv", index=False)
     if main is not None:
@@ -194,3 +198,29 @@ def evaluate_run(
             beam=main_beam,
         )
     return EvalResult(report_dir, metrics)
+
+
+def _reliability_check(
+    cfg: Config, run_dir: Path, table: CaptionTable, hyps: list[Hypothesis], res: CocoResult
+) -> dict[str, float]:
+    """Do flagged captions really score worse? (validates the ADR-022 calibration on test)."""
+    from captioner.evaluation.calibrate import _pooled_rows
+    from captioner.inference.reliability import Reliability
+
+    rel = Reliability.load(run_dir / "reliability.safetensors")
+    pooled = _pooled_rows(feature_paths(cfg)["pooled"], table.feature_idx)
+    ood = rel.is_out_of_domain(pooled).tolist()
+    low = [h.mean_logprob < rel.confidence_threshold for h in hyps]
+    flagged = [a or b for a, b in zip(ood, low, strict=True)]
+    cider = res.cider_per_image
+
+    def mean(values: list[float]) -> float:
+        return sum(values) / len(values) if values else float("nan")
+
+    return {
+        "flagged_rate": sum(flagged) / len(flagged),
+        "out_of_domain_rate": sum(ood) / len(ood),
+        "low_confidence_rate": sum(low) / len(low),
+        "cider_flagged": mean([c for c, f in zip(cider, flagged, strict=True) if f]),
+        "cider_unflagged": mean([c for c, f in zip(cider, flagged, strict=True) if not f]),
+    }

@@ -95,7 +95,7 @@ def _describe(data: bytes, predictor: Predictor, beam: int, mode: str) -> ui.Res
             status.update(label="Took too long", state="error")
             st.error("✖ Describing this image took too long. Please try again.")
             return None
-        audio, mime, audio_error = _speak(caption.text, mode, predictor)
+        audio, mime, audio_error = _speak(ui.spoken_text(caption), mode, predictor)
         heatmaps = service.build_heatmaps(image, caption, cfg.max_heatmap_words)
         status.update(label="Done", state="complete")
     return ui.Result(image, caption, audio, mime, audio_error, heatmaps)

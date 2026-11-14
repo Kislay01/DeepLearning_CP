@@ -73,6 +73,9 @@ decode:
   beam: 3
   length_alpha: 0.7
   max_len: 25
+  gender_neutral_output: true   # ADR-021
+  no_repeat_ngram: 3            # ADR-022
+  block_repeated_words: true    # ADR-022
 
 eval:
   split: test
@@ -81,6 +84,9 @@ eval:
   n_best_worst: 10
   n_attention: 10
   n_taxonomy: 100
+  reliability_centroids: 64     # ADR-022 out-of-domain detector
+  ood_quantile: 0.99
+  confidence_quantile: 0.10
 
 app:
   max_upload_mb: 10

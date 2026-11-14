@@ -22,6 +22,7 @@ from captioner.config import Config, save_config
 from captioner.data.vocab import Vocabulary
 from captioner.evaluation.metrics import METRIC_KEYS
 from captioner.inference.predictor import Predictor
+from captioner.inference.reliability import Reliability
 from captioner.models.captioner import build_model
 from captioner.models.encoder import ResNetEncoder
 from captioner.training.checkpoint import load_run
@@ -30,6 +31,7 @@ from captioner.utils.io import file_digest, read_json
 logger = logging.getLogger(__name__)
 
 RELEASE_FILES = ("model.safetensors", "vocab.json", "config.yaml", "model_card.md")
+OPTIONAL_FILES = ("reliability.safetensors",)
 _ENCODER_PREFIX = "encoder."
 _DECODER_PREFIX = "decoder."
 
@@ -72,7 +74,11 @@ def export_run(run_dir: Path, out_dir: Path, metrics_path: Path | None = None) -
     save_config(cfg, out_dir / "config.yaml")
     metrics = read_json(metrics_path) if metrics_path and metrics_path.exists() else None
     (out_dir / "model_card.md").write_text(model_card(cfg, meta, vocab, metrics), encoding="utf-8")
-    sums = {name: file_digest(out_dir / name) for name in RELEASE_FILES}
+    rel = run_dir / "reliability.safetensors"
+    if rel.exists():
+        shutil.copyfile(rel, out_dir / rel.name)
+    names = [n for n in (*RELEASE_FILES, *OPTIONAL_FILES) if (out_dir / n).exists()]
+    sums = {name: file_digest(out_dir / name) for name in names}
     (out_dir / "checksums.json").write_text(json.dumps(sums, indent=2) + "\n", encoding="utf-8")
     spec = {"version": __version__, "base_url": None, "files": sums}
     (out_dir / "release.yaml").write_text(
@@ -147,7 +153,7 @@ def verify_release(release_dir: Path) -> None:
     if not sums_path.exists():
         raise ReleaseError(f"{sums_path} missing")
     sums = json.loads(sums_path.read_text(encoding="utf-8"))
-    for name in RELEASE_FILES:
+    for name in sorted(set(RELEASE_FILES) | set(sums)):
         path = release_dir / name
         if not path.exists() or file_digest(path) != sums.get(name):
             raise ReleaseError(f"{name} is missing or its SHA-256 does not match checksums.json")
@@ -176,7 +182,9 @@ def load_release(release_dir: Path, device: torch.device | None = None) -> Predi
     }
     if enc_state:
         encoder.load_state_dict(enc_state)
-    return Predictor(decoder, vocab, cfg, encoder, device)
+    rel = release_dir / "reliability.safetensors"
+    reliability = Reliability.load(rel) if rel.exists() else None
+    return Predictor(decoder, vocab, cfg, encoder, device, reliability)
 
 
 class ReleaseSpec(BaseModel):
@@ -212,7 +220,7 @@ def fetch_release(spec: ReleaseSpec, cache_dir: Path, timeout: float = 60.0) -> 
         raise ReleaseError("configs/release.yaml has no published release (base_url/files)")
     dest = cache_dir / spec.version
     dest.mkdir(parents=True, exist_ok=True)
-    for name in RELEASE_FILES:
+    for name in [*RELEASE_FILES, *(n for n in OPTIONAL_FILES if n in spec.files)]:
         target, expected = dest / name, spec.files[name]
         if target.exists() and file_digest(target) == expected:
             continue
@@ -225,6 +233,8 @@ def fetch_release(spec: ReleaseSpec, cache_dir: Path, timeout: float = 60.0) -> 
             part.unlink()
             raise ReleaseError(f"SHA-256 mismatch for {url}; refusing to load it")
         part.replace(target)
-    sums = {name: spec.files[name] for name in RELEASE_FILES}
+    sums = {
+        name: spec.files[name] for name in (*RELEASE_FILES, *OPTIONAL_FILES) if name in spec.files
+    }
     (dest / "checksums.json").write_text(json.dumps(sums, indent=2) + "\n", encoding="utf-8")
     return dest

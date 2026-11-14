@@ -33,6 +33,7 @@ def test_regression_D1_evaluation_reports(
         assert set(METRIC_KEYS) <= set(res["raw_references"])
         assert res["fairness_served"]["gender_word_rate"] == 0.0  # ADR-021 rewrite
     assert metrics["references"] == "gender_neutral"
+    assert {"flagged_rate", "cider_flagged", "cider_unflagged"} <= set(metrics["reliability"])
     preds = pd.read_csv(result.report_dir / "predictions.csv")
     expected = [
         "image_id",
