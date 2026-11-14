@@ -24,7 +24,7 @@ from captioner.evaluation.metrics import METRIC_KEYS
 from captioner.inference.predictor import Predictor
 from captioner.inference.reliability import Reliability
 from captioner.models.captioner import build_model
-from captioner.models.encoder import ResNetEncoder
+from captioner.models.encoder import build_encoder
 from captioner.training.checkpoint import load_run
 from captioner.utils.io import file_digest, read_json
 
@@ -174,7 +174,7 @@ def load_release(release_dir: Path, device: torch.device | None = None) -> Predi
             if k.startswith(_DECODER_PREFIX)
         }
     )
-    encoder = ResNetEncoder(cfg.encoder.weights)
+    encoder = build_encoder(cfg.encoder.name, cfg.encoder.weights)
     enc_state = {
         k.removeprefix(_ENCODER_PREFIX): v
         for k, v in tensors.items()

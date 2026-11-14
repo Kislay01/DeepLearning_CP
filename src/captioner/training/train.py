@@ -35,7 +35,7 @@ from captioner.models.captioner import (
     count_trainable,
     feature_kind_for,
 )
-from captioner.models.encoder import ResNetEncoder
+from captioner.models.encoder import build_encoder
 from captioner.training.checkpoint import load_checkpoint, save_checkpoint
 from captioner.training.early_stopping import EarlyStopping
 from captioner.training.loop import (
@@ -126,7 +126,8 @@ def build_training_model(cfg: Config, vocab_size: int) -> nn.Module:
         logger.info("Initialised decoder from %s", cfg.train.init_from)
     if not cfg.train.finetune_encoder:
         return decoder
-    return ImageCaptioner(ResNetEncoder(cfg.encoder.weights, train_layer4=True), decoder)
+    encoder = build_encoder(cfg.encoder.name, cfg.encoder.weights, train_layer4=True)
+    return ImageCaptioner(encoder, decoder)
 
 
 def build_optimizer(model: nn.Module, cfg: Config) -> torch.optim.Optimizer:

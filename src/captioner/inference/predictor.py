@@ -17,13 +17,13 @@ from torch import nn
 from captioner.config import Config
 from captioner.data.neutral import neutralize_aligned
 from captioner.data.text import detokenize
-from captioner.data.transforms import ImageSource, load_image
+from captioner.data.transforms import ImageSource, load_image, transform_for
 from captioner.data.vocab import Vocabulary
 from captioner.inference.decode import build_repeat_policy, decode
 from captioner.inference.heatmap import attention_grid
 from captioner.inference.reliability import Reliability
 from captioner.models.captioner import CaptionModel
-from captioner.models.encoder import ResNetEncoder
+from captioner.models.encoder import build_encoder
 from captioner.training.checkpoint import load_run
 from captioner.utils.device import get_device
 
@@ -84,7 +84,10 @@ class Predictor:
         self.device = device or get_device()
         self.cfg = cfg
         self.vocab = vocab
-        self.encoder = (encoder or ResNetEncoder(cfg.encoder.weights)).to(self.device).eval()
+        self.encoder = (
+            (encoder or build_encoder(cfg.encoder.name, cfg.encoder.weights)).to(self.device).eval()
+        )
+        self.transform = transform_for(cfg.encoder.name)
         self.decoder = decoder.to(self.device).eval()
         self.reliability = reliability
         self.repeat = build_repeat_policy(
@@ -97,7 +100,7 @@ class Predictor:
     ) -> Predictor:
         """Load a training run folder (``best.pt`` + ``vocab.json``)."""
         run = load_run(run_dir, which)
-        encoder = ResNetEncoder(run.cfg.encoder.weights)
+        encoder = build_encoder(run.cfg.encoder.name, run.cfg.encoder.weights)
         if run.encoder_state:
             encoder.load_state_dict(run.encoder_state)
         rel_path = run_dir / "reliability.safetensors"
@@ -113,7 +116,7 @@ class Predictor:
         """Caption one image (path, bytes or PIL image) with the shared ``load_image``."""
         start = time.perf_counter()
         beam = beam or self.cfg.decode.beam
-        image = load_image(src).unsqueeze(0).to(self.device)  # (1, 3, 224, 224)
+        image = load_image(src, self.transform).unsqueeze(0).to(self.device)  # (1, 3, 224, 224)
         feats = self.encoder(image)  # (1, L, C)
         ood_score = (
             float(self.reliability.ood_score(feats.mean(dim=1))[0]) if self.reliability else None
