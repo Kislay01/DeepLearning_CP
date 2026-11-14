@@ -26,9 +26,9 @@ from captioner.data.dataset import (
     collate_images,
     open_feature_store,
 )
-from captioner.data.download import raw_layout
 from captioner.data.neutral import neutralize_aligned, neutralize_text
 from captioner.data.prepare import load_prepared
+from captioner.data.sources import image_root
 from captioner.data.text import clean_caption, detokenize, tokenize
 from captioner.evaluation.fairness import gender_metrics
 from captioner.evaluation.metrics import METRIC_KEYS, CocoResult, coco_scores
@@ -60,9 +60,7 @@ def _model_and_data(
     if run.encoder_state:  # fine-tuned encoder → evaluate from images
         encoder = ResNetEncoder(run.cfg.encoder.weights)
         encoder.load_state_dict(run.encoder_state)
-        return ImageCaptioner(encoder, run.model), ImageTableDataset(
-            table, raw_layout(cfg).image_dir
-        )
+        return ImageCaptioner(encoder, run.model), ImageTableDataset(table, image_root(cfg))
     path = feature_paths(cfg)[feature_kind_for(run.cfg.model)]
     return run.model, ImageFeatureDataset(table, open_feature_store(path, table))
 
@@ -126,7 +124,10 @@ def evaluate_run(
         raise CheckpointError(
             "The run's vocabulary differs from artifacts/vocab.json; re-run prepare"
         )
-    table = build_caption_table(prepared.manifest, split, run.vocab)
+    manifest = prepared.manifest
+    if cfg.eval.source:
+        manifest = manifest[manifest["image_id"].str.startswith(f"{cfg.eval.source}_")]
+    table = build_caption_table(manifest, split, run.vocab)
     model, ds = _model_and_data(cfg, run, table)
     model = model.to(device).eval()
     loader = DataLoader(ds, batch_size=cfg.train.batch_size, collate_fn=collate_images)
@@ -135,7 +136,9 @@ def evaluate_run(
         run.vocab.text_transform == "gender_neutral" or run.cfg.decode.gender_neutral_output
     )
     score_refs = _neutral_refs(refs) if neutral_eval else refs
-    report_dir = cfg.paths.reports_dir / run_dir.name
+    report_dir = cfg.paths.reports_dir / (
+        f"{run_dir.name}-{cfg.eval.source}" if cfg.eval.source else run_dir.name
+    )
     results: dict[str, Any] = {}
     rows: list[dict[str, Any]] = []
     main_beam = cfg.decode.beam if cfg.decode.beam in beams else beams[-1]
@@ -165,6 +168,7 @@ def evaluate_run(
     metrics = {
         "run": run_dir.name,
         "split": split,
+        "source": cfg.eval.source or cfg.dataset.name,
         "n_images": len(table),
         "model_kind": run.cfg.model.kind,
         "checkpoint_epoch": run.meta.get("epoch"),

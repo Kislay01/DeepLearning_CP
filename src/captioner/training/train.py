@@ -24,8 +24,8 @@ from captioner.data.dataset import (
     collate_images,
     open_feature_store,
 )
-from captioner.data.download import raw_layout
 from captioner.data.prepare import PreparedData, load_prepared
+from captioner.data.sources import image_root
 from captioner.data.transforms import build_train_augment
 from captioner.features.extract import feature_paths
 from captioner.inference.decode import Hypothesis, build_repeat_policy
@@ -96,7 +96,7 @@ def build_data(cfg: Config, prepared: PreparedData, gen: torch.Generator) -> _Da
     val_t = build_caption_table(prepared.manifest, "val", prepared.vocab)
     k = cfg.train.captions_per_image
     if cfg.train.finetune_encoder:
-        image_dir = raw_layout(cfg).image_dir
+        image_dir = image_root(cfg)
         train_ds: Dataset[Any] = ImageCaptionDataset(train_t, image_dir, build_train_augment(), k)
         val_ds: Dataset[Any] = ImageCaptionDataset(val_t, image_dir, None, 5)
         val_img: Dataset[Any] = ImageTableDataset(val_t, image_dir)
