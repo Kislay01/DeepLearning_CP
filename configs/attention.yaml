@@ -1,0 +1,14 @@
+# M2 — soft-attention LSTM decoder ("Show, Attend and Tell"), architecture.md §5.3
+defaults: [base]
+name: attention
+model:
+  kind: attention
+  embed_dim: 256
+  decoder_dim: 512
+  attention_dim: 512
+  encoder_dim: 2048
+  dropout: 0.5
+  alpha_c: 1.0
+train:
+  lr: 4.0e-4
+  weight_decay: 0.0
