@@ -1,0 +1,7 @@
+# Pinned model release the app downloads at start-up (security.md §3, architecture.md §10).
+# After `make export RUN=<run>`, upload artifacts/release/<version>/* to a GitHub Release
+# (or HF Hub revision), set base_url, and paste the SHA-256 values from checksums.json.
+# The app refuses to load any file whose SHA-256 differs.
+version: "0.1.0"
+base_url: null   # e.g. https://github.com/Kislay01/DeepLearning_CP/releases/download/v0.1.0
+files: {}        # model.safetensors / vocab.json / config.yaml / model_card.md -> sha256
