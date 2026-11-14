@@ -73,3 +73,19 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  docker:
+    # Builds the CPU serving image and checks that the app starts (architecture.md §10).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t captioner:ci .
+      - name: Smoke test (non-root, health endpoint)
+        run: |
+          test "$(docker run --rm captioner:ci id -u)" = "10001"
+          docker run --rm captioner:ci captioner version
+          docker run -d --name app -p 8501:8501 --read-only --tmpfs /tmp \
+            -v captioner-cache:/home/app/.cache captioner:ci
+          for i in $(seq 1 30); do curl -fsS localhost:8501/_stcore/health && break; sleep 2; done
+          curl -fsS localhost:8501/_stcore/health
+          docker logs app | tail -20
