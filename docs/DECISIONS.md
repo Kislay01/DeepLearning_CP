@@ -81,3 +81,21 @@ Format: context → decision → consequence. Numbered in the order they were ta
 - **Context:** `testing.md` §3.2 fixes the criterion (8 images, loss < 0.5 within 300 steps, exact greedy reproduction) but not the model size. CI has no pretrained weights (ADR-009), so cached fixture features come from a random-init ResNet-50; they are ~40× larger in magnitude than ImageNet features and very similar across images. Measured: with `decoder_dim=128` M2 crosses CE < 0.5 at step 216–280 for 3 of 4 seeds and misses for 1; with `embed_dim=128, decoder_dim=256` it crosses at step 118–131 on every seed tried.
 - **Decision:** the test rescales the batch features to unit standard deviation and uses `embed_dim=128, decoder_dim=256, attention_dim=64, dropout=0` with the full regulariser (λ = 1). Training continues after the 0.5 threshold (up to 300 steps) before checking exact greedy reproduction. Fixture features are extracted under a fixed seed so the test is deterministic.
 - **Consequence:** the test is a stable bug detector. Production hyper-parameters are unaffected.
+
+## ADR-014 — Failure taxonomy is computed with keyword heuristics
+
+- **Context:** `testing.md` §4 asks for failure-category counts (wrong object/count/colour, hallucinated object, gender/age assumption, generic caption) over 100 test images, without saying how they are labelled.
+- **Decision:** `captioner.evaluation.taxonomy` flags a category when the prediction uses a word of that kind (colour, number, gender/age term, first content word, other content words) that none of the 5 references uses, after crude plural folding. "Generic" = every word is in a small generic list. Reports label the counts "keyword heuristics".
+- **Consequence:** counts are reproducible and cheap but approximate. A manual audit is still recommended before drawing conclusions; `samples.html` shows the cases.
+
+## ADR-015 — Upload validation and `export` land in M5 (pulled forward from M6/M7)
+
+- **Context:** M5 requires a `predict` and `export` CLI. `security.md` §2 validation (M6) must sit in front of every untrusted image, and `export` (M7) is needed for `captioner export`.
+- **Decision:** implement `inference/validation.py` and `inference/release.py` (safetensors export, model card, checksums, verified loading) in M5. M6 wires validation into the app; M7 adds the start-up downloader, Dockerfile and release checklist.
+- **Consequence:** M5's CLI is complete. No placeholder commands.
+
+## ADR-016 — Decoding never emits `<unk>`; `max_len` counts generated tokens
+
+- **Context:** `testing.md` §2 requires that decoding never emits `<pad>`/`<start>`. An `<unk>` in a spoken caption is meaningless to a listener.
+- **Decision:** `<pad>`, `<start>` and `<unk>` log-probs are set to −∞ at every step. `decode.max_len` (25) caps generated tokens including `<end>` (code_style.md §6). Length normalisation is `logprob / n^α` with `n` = generated tokens incl. `<end>`, α = 0.7.
+- **Consequence:** captions consist of real words only. Training targets still contain `<unk>`, so the model learns its probability mass; it's just never selected.

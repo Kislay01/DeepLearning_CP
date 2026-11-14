@@ -76,3 +76,17 @@ def prepared_mini(tmp_path_factory: pytest.TempPathFactory) -> Config:
     torch.manual_seed(1234)  # random-init encoder → make the cached features reproducible
     extract_features(cfg)
     return cfg
+
+
+@pytest.fixture(scope="session")
+def trained_runs(prepared_mini: Config) -> dict[str, Path]:
+    """One short training run per model kind on the mini data (session-wide, read-only)."""
+    from captioner.training.train import run_training
+
+    runs = {}
+    for kind in ("merge", "attention"):
+        cfg = prepared_mini.with_overrides(
+            {"name": f"t-{kind}", "model": {"kind": kind}, "train": {"epochs": 1}}
+        )
+        runs[kind] = run_training(cfg).run_dir
+    return runs
