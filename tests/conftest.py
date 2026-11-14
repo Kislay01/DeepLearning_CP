@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import torch
 
 from captioner.config import Config, load_config
 
@@ -72,5 +73,6 @@ def prepared_mini(tmp_path_factory: pytest.TempPathFactory) -> Config:
     cfg = make_config(tmp_path_factory.mktemp("prepared"))
     install_mini_raw(cfg)
     prepare_data(cfg)
+    torch.manual_seed(1234)  # random-init encoder → make the cached features reproducible
     extract_features(cfg)
     return cfg

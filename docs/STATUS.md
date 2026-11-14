@@ -1,6 +1,6 @@
 # Status
 
-Last updated: M3 (models).
+Last updated: M4 (training).
 
 | Milestone | Branch | State | Notes |
 |---|---|---|---|
@@ -8,7 +8,7 @@ Last updated: M3 (models).
 | M1 Data pipeline | `feat/data` | done | Full data verified: MD5s match, 40,000 rows, 6000/1000/1000, orphan dropped, vocab 2,529 + 4 (7,333 distinct train words), train p99 = 22 words |
 | M2 Preprocessing & features | `feat/features` | done (code + tests) | Verified on mini data with random-init ResNet-50. **Full 8,091-image extraction not run here**: IMAGENET1K_V2 weights are unreachable from the sandbox (ADR-009). Run `make features` on Colab/Kaggle. |
 | M3 Models | `feat/models` | done | M1 merge (2.42 M params) and M2 soft attention (12.18 M params, ADR-011), shared `step()` interface, loss with masked attention regulariser (ADR-010) |
-| M4 Training | `feat/training` | not started | |
+| M4 Training | `feat/training` | done (code + tests) | Loop verified on mini data (CPU): overfit-one-batch, determinism, checkpoint round-trip, CLI smoke, fine-tune stage. **Full-data training not run here** (no GPU, no pretrained features, ADR-009). |
 | M5 Decoding & evaluation | `feat/eval` | not started | |
 | M6 App & TTS | `feat/app` | not started | |
 | M7 Hardening & release | `feat/release` | not started | |

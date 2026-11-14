@@ -107,6 +107,7 @@ class TrainConfig(_Strict):
     max_steps_per_epoch: int | None = None
     finetune_encoder: bool = False
     encoder_lr: float = 1e-4
+    init_from: str | None = None
 
 
 class DecodeConfig(_Strict):

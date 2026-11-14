@@ -1,0 +1,13 @@
+# M1 — merge baseline (bug-fixed reference model), architecture.md §5.2
+defaults: [base]
+name: merge_baseline
+model:
+  kind: merge
+  embed_dim: 256
+  decoder_dim: 256
+  encoder_dim: 2048
+  dropout: 0.5
+  alpha_c: 0.0
+train:
+  lr: 4.0e-4
+  weight_decay: 1.0e-5

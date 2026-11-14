@@ -176,6 +176,20 @@ class ImageCaptionDataset(Dataset[tuple[torch.Tensor, torch.Tensor, int, int]]):
         return image, ids, int(self.table.lengths[img, cap]), img
 
 
+class ImageTableDataset(Dataset[tuple[torch.Tensor, int]]):
+    """One preprocessed image per table entry ``(image, image_index)`` (fine-tuning eval)."""
+
+    def __init__(self, table: CaptionTable, image_dir: Path) -> None:
+        self.table = table
+        self.image_dir = image_dir
+
+    def __len__(self) -> int:
+        return len(self.table)
+
+    def __getitem__(self, i: int) -> tuple[torch.Tensor, int]:
+        return load_image(self.image_dir / f"{self.table.image_ids[i]}.jpg"), i
+
+
 @dataclass(frozen=True)
 class Batch:
     """A collated training batch, sorted by caption length (descending)."""
