@@ -107,7 +107,7 @@ class EncoderConfig(_Strict):
 
 
 class ModelConfig(_Strict):
-    kind: Literal["merge", "attention"] = "attention"
+    kind: Literal["merge", "attention", "transformer"] = "attention"
     embed_dim: int = 256
     decoder_dim: int = 512
     attention_dim: int = 512
@@ -115,6 +115,12 @@ class ModelConfig(_Strict):
     num_regions: int = 49
     dropout: float = Field(0.5, ge=0.0, lt=1.0)
     alpha_c: float = Field(1.0, ge=0.0)
+    # M3 Transformer decoder (ADR-027); decoder_dim is the model width
+    transformer_layers: int = Field(3, ge=1)
+    transformer_heads: int = Field(8, ge=1)
+    transformer_ff: int = Field(2048, ge=1)
+    transformer_enc_layers: int = Field(1, ge=0)
+    max_positions: int = Field(64, ge=2)
 
 
 class TrainConfig(_Strict):
