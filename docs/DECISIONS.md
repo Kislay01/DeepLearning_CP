@@ -57,3 +57,15 @@ Format: context → decision → consequence. Numbered in the order they were ta
 - **Context:** torchvision downloads `IMAGENET1K_V2` weights from `download.pytorch.org`, which the build sandbox can't reach. There is no GPU here either.
 - **Decision:** code paths accept `encoder.weights: null` (random init) for tests; the default configs keep `IMAGENET1K_V2`. Full feature extraction, training and evaluation are run through `notebooks/colab_train.ipynb` / `make data features train eval` on a machine with network access (and ideally a GPU).
 - **Consequence:** result tables in this repo say `not yet run` until someone runs those commands; nothing is estimated.
+
+## ADR-010 — Doubly-stochastic regulariser is averaged over regions and batch
+
+- **Context:** `architecture.md` §5.3 writes the regulariser as `λ · Σ_i (1 − Σ_t α_{t,i})²` with `λ = 1.0`. Summed literally over the 49 regions, the term's floor for a 12-word caption is about `(49 − 12)² / 49 ≈ 28`, roughly 10× the cross-entropy, so λ = 1 would let the penalty dominate training. The widely used PyTorch implementation of Show-Attend-Tell, which reproduces the paper's Flickr8k numbers with λ = 1, averages over regions and batch.
+- **Decision:** `reg = alpha_c · mean_b mean_i (1 − Σ_t α_{t,i})²`, with `alpha_c = 1.0` from config. Attention weights on padded steps are zeroed before the sum over t.
+- **Consequence:** the term equals the doc formula scaled by 1/L. To use the literal sum, set `model.alpha_c: 49.0`. Ablation A1 (`alpha_c: 0`) is unaffected.
+
+## ADR-011 — M2 has 12.2 M trainable parameters, not "≈ 8–9 M"
+
+- **Context:** `architecture.md` §5.3 estimates ≈ 8–9 M trainable parameters for M2 with V ≈ 2.5 k. Counting the layers it specifies (E = 256, D = 512, A = 512, C = 2048, V = 2,533) gives 12,229,862. Most of the gap is the `LSTMCell` input `[E(y); z_t]`, which includes the 2,048-d context: `4·512·(256+2048)` ≈ 4.7 M weights alone.
+- **Decision:** keep the documented dimensions and treat the doc's count as an estimate error. `test_parameter_counts_match_architecture` asserts the exact analytic count for M2 (12,229,862) and M1 (2,416,101).
+- **Consequence:** still fits easily on a T4 (≈ 49 MB fp32 weights). Checkpoints will be ~50 MB rather than the ~35 MB guessed in `database.md` §1; the release file stays out of git either way.
