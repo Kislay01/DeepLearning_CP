@@ -91,8 +91,10 @@ def diversity(predictions: Sequence[str]) -> dict[str, float]:
     """Unique-caption share, vocabulary used and mean length (generic-caption collapse check)."""
     words = [tokenize(clean_caption(p)) for p in predictions]
     n = max(1, len(predictions))
+    repeated = sum(len(c := [w for w in ws if w not in STOPWORDS]) != len(set(c)) for ws in words)
     return {
         "n_captions": float(len(predictions)),
+        "repeated_word_rate": repeated / n,
         "unique_caption_ratio": len(set(predictions)) / n,
         "vocab_used": float(len({w for ws in words for w in ws})),
         "mean_length": sum(len(ws) for ws in words) / n,

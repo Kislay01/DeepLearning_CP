@@ -19,8 +19,9 @@ from captioner.data.neutral import neutralize_aligned
 from captioner.data.text import detokenize
 from captioner.data.transforms import ImageSource, load_image
 from captioner.data.vocab import Vocabulary
-from captioner.inference.decode import decode
+from captioner.inference.decode import build_repeat_policy, decode
 from captioner.inference.heatmap import attention_grid
+from captioner.inference.reliability import Reliability
 from captioner.models.captioner import CaptionModel
 from captioner.models.encoder import ResNetEncoder
 from captioner.training.checkpoint import load_run
@@ -37,7 +38,9 @@ class Caption:
         score: Length-normalised log-probability used for ranking.
         mean_logprob: Average log-probability per token (confidence hint).
         attention: ``(T, 7, 7)`` attention per word (M2), else ``None``.
-        low_confidence: ``mean_logprob`` below the configured threshold.
+        low_confidence: ``mean_logprob`` below the calibrated (or configured) threshold.
+        out_of_domain: The photo looks unlike the training images (ADR-022).
+        ood_score: Distance to the training distribution, or ``None`` without calibration.
         beam: Beam width used.
         latency_s: Wall-clock seconds for preprocessing + encoding + decoding.
     """
@@ -50,6 +53,12 @@ class Caption:
     low_confidence: bool
     beam: int
     latency_s: float
+    out_of_domain: bool = False
+    ood_score: float | None = None
+
+    @property
+    def reliable(self) -> bool:
+        return not (self.low_confidence or self.out_of_domain)
 
 
 class Predictor:
@@ -70,12 +79,17 @@ class Predictor:
         cfg: Config,
         encoder: nn.Module | None = None,
         device: torch.device | None = None,
+        reliability: Reliability | None = None,
     ) -> None:
         self.device = device or get_device()
         self.cfg = cfg
         self.vocab = vocab
         self.encoder = (encoder or ResNetEncoder(cfg.encoder.weights)).to(self.device).eval()
         self.decoder = decoder.to(self.device).eval()
+        self.reliability = reliability
+        self.repeat = build_repeat_policy(
+            vocab.itos, cfg.decode.no_repeat_ngram, cfg.decode.block_repeated_words
+        )
 
     @classmethod
     def from_run(
@@ -86,7 +100,9 @@ class Predictor:
         encoder = ResNetEncoder(run.cfg.encoder.weights)
         if run.encoder_state:
             encoder.load_state_dict(run.encoder_state)
-        return cls(run.model, run.vocab, run.cfg, encoder, device)
+        rel_path = run_dir / "reliability.safetensors"
+        reliability = Reliability.load(rel_path) if rel_path.exists() else None
+        return cls(run.model, run.vocab, run.cfg, encoder, device, reliability)
 
     @property
     def has_attention(self) -> bool:
@@ -99,8 +115,12 @@ class Predictor:
         beam = beam or self.cfg.decode.beam
         image = load_image(src).unsqueeze(0).to(self.device)  # (1, 3, 224, 224)
         feats = self.encoder(image)  # (1, L, C)
+        ood_score = (
+            float(self.reliability.ood_score(feats.mean(dim=1))[0]) if self.reliability else None
+        )
         model: CaptionModel = self.decoder  # type: ignore[assignment]
-        (hyp,) = decode(model, feats, beam, self.cfg.decode.max_len, self.cfg.decode.length_alpha)
+        d = self.cfg.decode
+        (hyp,) = decode(model, feats, beam, d.max_len, d.length_alpha, self.repeat)
         words = self.vocab.decode(hyp.ids)
         if self.cfg.decode.gender_neutral_output:
             words = neutralize_aligned(words)
@@ -116,7 +136,19 @@ class Predictor:
             score=hyp.score,
             mean_logprob=hyp.mean_logprob,
             attention=attention,
-            low_confidence=hyp.mean_logprob < self.cfg.app.low_confidence_logprob,
+            low_confidence=hyp.mean_logprob < self._confidence_threshold,
             beam=beam,
             latency_s=time.perf_counter() - start,
+            out_of_domain=bool(
+                self.reliability
+                and ood_score is not None
+                and ood_score > self.reliability.ood_threshold
+            ),
+            ood_score=ood_score,
         )
+
+    @property
+    def _confidence_threshold(self) -> float:
+        if self.reliability is not None:
+            return self.reliability.confidence_threshold
+        return self.cfg.app.low_confidence_logprob

@@ -149,6 +149,25 @@ def evaluate(
 
 
 @app.command()
+def calibrate(
+    config: ConfigOpt = DEFAULT_CONFIG, run: RunOpt = None, device: str | None = None
+) -> None:
+    """Fit the out-of-domain detector and confidence threshold for a run (runs after train)."""
+    from captioner.evaluation.calibrate import calibrate_run
+    from captioner.utils.device import get_device
+
+    cfg = _load(config)
+    rel = calibrate_run(cfg, _resolve_run(cfg, run), get_device(device))
+    if rel is None:
+        console.print("[yellow]Skipped: fine-tuned encoder runs are not calibrated[/]")
+    else:
+        console.print(
+            f"[green]Calibrated[/] OOD threshold {rel.ood_threshold:.4f} · "
+            f"confidence threshold {rel.confidence_threshold:.3f}"
+        )
+
+
+@app.command()
 def predict(
     image: Annotated[Path, typer.Option("--image", "-i", exists=True, dir_okay=False)],
     beam: Annotated[int | None, typer.Option("--beam", "-b", min=1)] = None,
@@ -179,9 +198,14 @@ def predict(
         raise typer.Exit(code=2) from exc
     cap = predictor.caption(validated, beam=beam)
     console.print(cap.text)
+    flags = [
+        f
+        for f, on in (("low confidence", cap.low_confidence), ("out of domain", cap.out_of_domain))
+        if on
+    ]
     console.print(
         f"[dim]beam {cap.beam} · mean log-prob {cap.mean_logprob:.2f}"
-        f"{' · low confidence' if cap.low_confidence else ''} · {cap.latency_s:.2f} s[/]"
+        f"{' · ' + ', '.join(flags) if flags else ''} · {cap.latency_s:.2f} s[/]"
     )
 
 
