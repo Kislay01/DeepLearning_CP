@@ -50,12 +50,13 @@ def train_step(
     amp: Amp,
     grad_clip: float,
     alpha_c: float,
+    label_smoothing: float = 0.0,
 ) -> LossOutput:
     """Forward, loss, backward, clip (global norm) and optimizer step for one batch."""
     optimizer.zero_grad(set_to_none=True)
     with amp.autocast():
         out = model(batch.feats, batch.captions, batch.lengths)
-        loss = caption_loss(out, batch.captions, batch.lengths, alpha_c)
+        loss = caption_loss(out, batch.captions, batch.lengths, alpha_c, label_smoothing)
     scaled: torch.Tensor = amp.scaler.scale(loss.total)
     scaled.backward()  # type: ignore[no-untyped-call]
     amp.scaler.unscale_(optimizer)
@@ -106,6 +107,22 @@ def train_epoch(
         regs.append(float(loss.reg))
     n = max(1, len(totals))
     return EpochStats(sum(totals) / n, sum(ces) / n, sum(regs) / n, len(totals), totals)
+
+
+def run_epoch(
+    loader: DataLoader[Batch],
+    step: Callable[[Batch], dict[str, float]],
+    device: torch.device,
+    max_steps: int | None = None,
+) -> dict[str, float]:
+    """Apply ``step`` to every batch and average the returned metrics."""
+    totals: dict[str, float] = {}
+    n = 0
+    for batch in _limited(loader, max_steps):
+        for key, value in step(batch.to(device)).items():
+            totals[key] = totals.get(key, 0.0) + value
+        n += 1
+    return {k: v / max(1, n) for k, v in totals.items()}
 
 
 @torch.inference_mode()
