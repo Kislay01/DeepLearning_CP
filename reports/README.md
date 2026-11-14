@@ -21,6 +21,9 @@ references (`results.*.raw_references`, for comparison with the literature).
 | E6 | M2 attention, neutral captions | Flickr8k | beam 3 | not yet run | not yet run | not yet run | not yet run | not yet run | — |
 | E7 | M2 attention, ResNet-50 | COCO | beam 3 | not yet run | not yet run | not yet run | not yet run | not yet run | — |
 | E8 | **M2 attention, CLIP ViT-B/32 (recommended)** | COCO | beam 3 | not yet run | not yet run | not yet run | not yet run | not yet run | — |
+| E9 | M2 CLIP + **SCST** (CIDEr-D reward) | COCO | beam 3 | not yet run | not yet run | not yet run | not yet run | not yet run | — |
+| E10 | **M3 Transformer**, CLIP | COCO | beam 3 | not yet run | not yet run | not yet run | not yet run | not yet run | — |
+| E11 | M3 Transformer, CLIP + SCST | COCO | beam 3 | not yet run | not yet run | not yet run | not yet run | not yet run | — |
 | A1 | M2 without doubly-stochastic reg. | Flickr8k | beam 3 | not yet run | not yet run | not yet run | not yet run | not yet run | — |
 | A2 | M2 vocab min_freq 1 | Flickr8k | beam 3 | not yet run | not yet run | not yet run | not yet run | not yet run | — |
 | A3 | M2 without repetition blocking | Flickr8k | beam 3 | not yet run | not yet run | not yet run | not yet run | not yet run | — |
@@ -66,6 +69,10 @@ uv run captioner evaluate -c configs/attention.yaml --run <E4 run> --set eval.ta
 make data CONFIG=configs/coco_clip.yaml          # downloads COCO 2014 + Karpathy splits
 make features CONFIG=configs/coco_attention.yaml && make train CONFIG=configs/coco_attention.yaml && make eval CONFIG=configs/coco_attention.yaml   # E7
 make features CONFIG=configs/coco_clip.yaml      && make train CONFIG=configs/coco_clip.yaml      && make eval CONFIG=configs/coco_clip.yaml        # E8
+uv run captioner train -c configs/coco_clip_scst.yaml --set train.init_from=artifacts/runs/<E8 run>/best.pt && make eval CONFIG=configs/coco_clip_scst.yaml   # E9
+make train CONFIG=configs/coco_clip_transformer.yaml && make eval CONFIG=configs/coco_clip_transformer.yaml                                            # E10
+uv run captioner train -c configs/coco_clip_scst.yaml --set name=coco_clip_transformer_scst --set model.kind=transformer \
+    --set model.alpha_c=0 --set model.dropout=0.1 --set train.init_from=artifacts/runs/<E10 run>/best.pt                                                  # E11
 ```
 
 `make eval` writes `reports/<run>/metrics.json` (all beams), `predictions.csv` and `samples.html`
