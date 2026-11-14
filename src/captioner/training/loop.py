@@ -6,6 +6,7 @@ import contextlib
 import math
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
+from typing import Any
 
 import torch
 from torch import nn
@@ -14,7 +15,7 @@ from torch.utils.data import DataLoader
 from captioner.data.dataset import Batch, CaptionTable
 from captioner.data.vocab import Vocabulary
 from captioner.evaluation.metrics import corpus_bleu4, reference_tokens
-from captioner.inference.decode import Hypothesis, greedy_decode
+from captioner.inference.decode import Hypothesis, decode, greedy_decode
 from captioner.models.captioner import CaptionModel, LossOutput, caption_loss
 
 Decoder = Callable[[CaptionModel, torch.Tensor], list[Hypothesis]]
@@ -131,10 +132,15 @@ def greedy_decoder(max_len: int, length_alpha: float = 0.0) -> Decoder:
     return lambda model, feats: greedy_decode(model, feats, max_len, length_alpha)
 
 
+def beam_decoder(beam: int, max_len: int, length_alpha: float) -> Decoder:
+    """Decoder callable for ``decode_split``: greedy for ``beam == 1``, beam search otherwise."""
+    return lambda model, feats: decode(model, feats, beam, max_len, length_alpha)
+
+
 @torch.inference_mode()
 def decode_split(
     model: nn.Module,
-    loader: DataLoader[tuple[torch.Tensor, torch.Tensor]],
+    loader: DataLoader[Any],
     device: torch.device,
     decoder: Decoder,
 ) -> list[Hypothesis]:

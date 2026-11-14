@@ -40,9 +40,9 @@ from captioner.training.checkpoint import load_checkpoint, save_checkpoint
 from captioner.training.early_stopping import EarlyStopping
 from captioner.training.loop import (
     Amp,
+    beam_decoder,
     bleu4_for,
     decode_split,
-    greedy_decoder,
     train_epoch,
     validation_loss,
 )
@@ -241,7 +241,7 @@ def _fit(
 ) -> list[dict[str, float]]:
     history: list[dict[str, float]] = []
     alpha_c = cfg.model.alpha_c if cfg.model.kind == "attention" else 0.0
-    decoder = greedy_decoder(cfg.decode.max_len, cfg.decode.length_alpha)
+    decoder = beam_decoder(cfg.train.val_beam, cfg.decode.max_len, cfg.decode.length_alpha)
     for epoch in range(1, cfg.train.epochs + 1):
         tr = train_epoch(
             model,
