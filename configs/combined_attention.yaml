@@ -1,0 +1,23 @@
+# M2 on COCO + Flickr30k + Flickr8k (Karpathy splits) — the broadest training set (ADR-023).
+# Flickr30k images need the request form at https://shannon.cs.illinois.edu/DenotationGraph/
+# (or a Kaggle mirror); put them in data/raw/flickr30k-images/ or set an absolute image_root.
+# Evaluate one source at a time: captioner evaluate -c configs/combined_attention.yaml --set eval.source=coco
+defaults: [coco_attention]
+name: combined_attention
+dataset:
+  name: combined
+  sources:
+    - name: coco
+      json_file: dataset_coco.json
+      image_root: coco
+      archives:
+        - {url: http://images.cocodataset.org/zips/train2014.zip, md5: null, dest: coco}
+        - {url: http://images.cocodataset.org/zips/val2014.zip, md5: null, dest: coco}
+    - name: flickr30k
+      json_file: dataset_flickr30k.json
+      image_root: flickr30k-images
+    - name: flickr8k
+      json_file: dataset_flickr8k.json
+      image_root: Flicker8k_Dataset
+      archives:
+        - {url: https://github.com/jbrownlee/Datasets/releases/download/Flickr8k/Flickr8k_Dataset.zip, md5: f18a1e2920de5bd84dae7cf08ec78978, dest: .}

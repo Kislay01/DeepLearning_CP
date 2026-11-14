@@ -52,12 +52,12 @@ def test_encoder_layer4_finetune_unfreezes_only_layer4() -> None:
 
 
 def test_feature_files_schema(prepared_mini: Config) -> None:
-    names = list_images(raw_layout(prepared_mini).image_dir)
+    names = [n.removesuffix(".jpg") for n in list_images(raw_layout(prepared_mini).image_dir)]
     paths = feature_paths(prepared_mini)
     with h5py.File(paths["pooled"], "r") as fh:
         assert fh["features"].shape == (20, 2048)
         assert fh["features"].dtype == np.float16
-        assert list(fh["image_ids"].asstr()[:]) == [n.removesuffix(".jpg") for n in names]
+        assert list(fh["image_ids"].asstr()[:]) == names
         assert fh.attrs["encoder"] == "resnet50" and fh.attrs["input"] == 224
         assert fh.attrs["weights"] == "random"
     with h5py.File(paths["spatial"], "r") as fh:
@@ -71,7 +71,7 @@ def test_feature_files_schema(prepared_mini: Config) -> None:
 
 
 def test_validate_feature_file_errors(prepared_mini: Config, tmp_path: Path) -> None:
-    names = list_images(raw_layout(prepared_mini).image_dir)
+    names = [n.removesuffix(".jpg") for n in list_images(raw_layout(prepared_mini).image_dir)]
     pooled = feature_paths(prepared_mini)["pooled"]
     with pytest.raises(FeatureFileError, match="not found"):
         validate_feature_file(tmp_path / "x.h5", names, "pooled")

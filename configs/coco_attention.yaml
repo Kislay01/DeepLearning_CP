@@ -1,0 +1,26 @@
+# M2 on MS-COCO 2014 (Karpathy split: 113k train / 5k val / 5k test) — ADR-023.
+# 80 everyday object categories, indoor and outdoor: far broader than Flickr8k's people + dogs.
+# Disk: ~19 GB archives + ~19 GB images + features (pooled 0.5 GB, spatial ≈ 15–25 GB with lzf).
+# COCO publishes no checksums: the first download's MD5 is recorded in data/raw/checksums.json
+# and enforced afterwards; pin it below once known.
+defaults: [attention]
+name: coco_attention
+dataset:
+  name: coco
+  kind: karpathy
+  sources:
+    - name: coco
+      json_file: dataset_coco.json
+      image_root: coco
+      archives:
+        - {url: http://images.cocodataset.org/zips/train2014.zip, md5: null, dest: coco}
+        - {url: http://images.cocodataset.org/zips/val2014.zip, md5: null, dest: coco}
+vocab:
+  gender_neutral: true
+train:
+  batch_size: 128
+  epochs: 20
+  patience: 4
+encoder:
+  batch_size: 64
+  num_workers: 4
