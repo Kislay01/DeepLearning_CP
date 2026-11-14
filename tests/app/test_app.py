@@ -106,7 +106,7 @@ def test_heatmaps_and_about_present(app_env: dict[str, int]) -> None:
     assert "See where the model looked (heat-maps)" in labels
     assert "About & limitations" in labels
     about = " ".join(m.value for m in at.markdown)
-    assert "only the caption text is sent" in about
+    assert "nothing leaves it" in about and "Google" not in about
 
 
 def test_missing_model_message(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

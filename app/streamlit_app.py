@@ -16,13 +16,18 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import components as ui
 
-from captioner.config import AppConfig
 from captioner.inference import service
 from captioner.inference.predictor import Predictor
 from captioner.inference.validation import InvalidImageError, validate_upload
 from captioner.tts import speak
 
-SPEECH_MODES = {"Online voice": "gtts", "Offline voice": "offline", "Off": "off"}
+SPEECH_MODES = {
+    "Natural voice (on this server)": "piper",
+    "Basic voice (eSpeak)": "offline",
+    "Online voice (sends caption text to Google)": "gtts",
+    "Off": "off",
+}
+DEFAULT_SPEECH = "Natural voice (on this server)"
 
 
 @st.cache_resource(show_spinner="Loading the model…")
@@ -38,7 +43,7 @@ def _options(predictor: Predictor | None) -> tuple[int, bool, str]:
     return (
         beam,
         bool(state.get("autoplay", False)),
-        SPEECH_MODES[state.get("speech", "Online voice")],
+        SPEECH_MODES[state.get("speech", DEFAULT_SPEECH)],
     )
 
 
@@ -49,17 +54,30 @@ def _render_options(predictor: Predictor | None) -> None:
         index = choices.index(default_beam) if default_beam in choices else 1
         st.radio("Beam width", choices, index=index, key="beam", horizontal=True)
         st.toggle("Play audio automatically", value=False, key="autoplay")
-        modes = list(SPEECH_MODES) if speak.offline_available() else ["Online voice", "Off"]
-        st.radio("Speech", modes, key="speech", horizontal=True)
+        st.radio("Speech", _speech_modes(predictor), key="speech")
 
 
-def _speak(text: str, mode: str, cfg: AppConfig) -> tuple[bytes | None, str, str | None]:
+def _speech_modes(predictor: Predictor | None) -> list[str]:
+    modes = [DEFAULT_SPEECH]
+    if speak.offline_available():
+        modes.append("Basic voice (eSpeak)")
+    if predictor is not None and predictor.cfg.tts.allow_online:
+        modes.append("Online voice (sends caption text to Google)")
+    return [*modes, "Off"]
+
+
+def _speak(text: str, mode: str, predictor: Predictor) -> tuple[bytes | None, str, str | None]:
     if mode == "off" or not text:
-        return None, "audio/mp3", None
+        return None, "audio/wav", None
     try:
-        speech = speak.synthesize(text, engine=mode, timeout_s=cfg.tts_timeout_s)  # type: ignore[arg-type]
+        speech = speak.synthesize(
+            text,
+            engine=mode,  # type: ignore[arg-type]
+            timeout_s=predictor.cfg.app.tts_timeout_s,
+            cfg=predictor.cfg.tts,
+        )
     except speak.TTSError:
-        return None, "audio/mp3", ui.AUDIO_UNAVAILABLE
+        return None, "audio/wav", ui.AUDIO_UNAVAILABLE
     return speech.audio, speech.mime, None
 
 
@@ -77,7 +95,7 @@ def _describe(data: bytes, predictor: Predictor, beam: int, mode: str) -> ui.Res
             status.update(label="Took too long", state="error")
             st.error("✖ Describing this image took too long. Please try again.")
             return None
-        audio, mime, audio_error = _speak(caption.text, mode, cfg)
+        audio, mime, audio_error = _speak(caption.text, mode, predictor)
         heatmaps = service.build_heatmaps(image, caption, cfg.max_heatmap_words)
         status.update(label="Done", state="complete")
     return ui.Result(image, caption, audio, mime, audio_error, heatmaps)
@@ -92,6 +110,8 @@ def main() -> None:
         predictor = None
         st.error(f"✖ {exc}")
     beam, autoplay, mode = _options(predictor)
+    if mode == "gtts" and (predictor is None or not predictor.cfg.tts.allow_online):
+        mode = "piper"
 
     upload = st.file_uploader(ui.UPLOAD_LABEL, type=ui.ALLOWED_TYPES, key="upload")
     camera = st.camera_input("Take a photo") if st.toggle("Use camera", key="use_camera") else None
@@ -121,7 +141,7 @@ def main() -> None:
         if predictor is not None and predictor.has_attention:
             ui.heatmap_grid(result.heatmaps)
     _render_options(predictor)
-    ui.about()
+    ui.about(online_speech=predictor is not None and predictor.cfg.tts.allow_online)
 
 
 main()
