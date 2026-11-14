@@ -1,0 +1,17 @@
+# M3 — Transformer decoder on CLIP grid features, COCO (ADR-027). Same data, encoder, recipe and
+# SCST stage as configs/coco_clip.yaml; compare the two in reports/README.md (E10 vs E8).
+defaults: [coco_clip]
+name: coco_clip_transformer
+model:
+  kind: transformer
+  decoder_dim: 512
+  transformer_layers: 3
+  transformer_heads: 8
+  transformer_ff: 2048
+  transformer_enc_layers: 1
+  dropout: 0.1
+  alpha_c: 0.0
+train:
+  lr: 5.0e-4
+  warmup_steps: 2000
+  label_smoothing: 0.1

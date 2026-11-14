@@ -123,6 +123,10 @@ def build_model(cfg: ModelConfig, vocab_size: int) -> nn.Module:
         from captioner.models.merge import MergeModel
 
         return MergeModel(cfg, vocab_size)
+    if cfg.kind == "transformer":
+        from captioner.models.transformer import TransformerCaptioner
+
+        return TransformerCaptioner(cfg, vocab_size)
     from captioner.models.attention import AttentionModel
 
     return AttentionModel(cfg, vocab_size)

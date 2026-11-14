@@ -33,16 +33,20 @@ def _one_batch(cfg: Config, kind: str, n: int = 8) -> tuple[Batch, CaptionTable]
     return Batch(feats, captions, lengths, torch.arange(n)), table
 
 
-@pytest.mark.parametrize("kind", ["merge", "attention"])
+@pytest.mark.parametrize("kind", ["merge", "attention", "transformer"])
 def test_overfit_one_batch(prepared_mini: Config, kind: str) -> None:
     seed_everything(0)
     batch, _ = _one_batch(prepared_mini, kind)
     mcfg = ModelConfig.model_validate(
-        {"kind": kind, "embed_dim": 128, "decoder_dim": 256, "attention_dim": 64, "dropout": 0.0}
-    )
+        {
+            "kind": kind, "embed_dim": 128, "decoder_dim": 256 if kind != "transformer" else 128,
+            "attention_dim": 64, "dropout": 0.0, "transformer_layers": 2, "transformer_heads": 4,
+            "transformer_ff": 256,
+        }
+    )  # fmt: skip
     vocab = load_prepared(prepared_mini).vocab
     model = build_model(mcfg, len(vocab))
-    opt = torch.optim.Adam(model.parameters(), lr=3e-3)
+    opt = torch.optim.Adam(model.parameters(), lr=3e-3 if kind != "transformer" else 1e-3)
     amp = Amp(torch.device("cpu"), enabled=False)
     alpha_c = 1.0 if kind == "attention" else 0.0
     ce, reached = float("inf"), None

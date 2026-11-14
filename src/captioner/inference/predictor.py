@@ -109,7 +109,7 @@ class Predictor:
 
     @property
     def has_attention(self) -> bool:
-        return self.cfg.model.kind == "attention"
+        return self.cfg.model.kind in ("attention", "transformer")
 
     @torch.inference_mode()
     def caption(self, src: ImageSource, beam: int | None = None) -> Caption:
