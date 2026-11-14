@@ -46,7 +46,13 @@ def test_export_roundtrip_identical_predictions(
 ) -> None:
     run_dir = trained_runs[kind]
     sums = export_run(run_dir, tmp_path / "rel")
-    assert set(sums) == {"model.safetensors", "vocab.json", "config.yaml", "model_card.md"}
+    assert set(sums) == {
+        "model.safetensors",
+        "vocab.json",
+        "config.yaml",
+        "model_card.md",
+        "reliability.safetensors",
+    }
     assert json.loads((tmp_path / "rel" / "checksums.json").read_text()) == sums
     card = (tmp_path / "rel" / "model_card.md").read_text()
     assert "Not yet evaluated" in card and "non-commercial" in card
