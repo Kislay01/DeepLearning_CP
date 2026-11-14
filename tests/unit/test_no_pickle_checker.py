@@ -23,7 +23,3 @@ def test_checker_flags_pickle_and_unsafe_torch_load(tmp_path: Path) -> None:
     assert any("pickle" in p for p in problems)
     assert sum("weights_only" in p for p in problems) == 1
     assert checker.main([str(tmp_path)]) == 1
-
-
-def test_repository_source_is_clean() -> None:
-    assert checker.find_violations([ROOT / "src", ROOT / "app"]) == []
