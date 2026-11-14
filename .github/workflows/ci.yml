@@ -84,6 +84,7 @@ jobs:
         run: |
           test "$(docker run --rm captioner:ci id -u)" = "10001"
           docker run --rm captioner:ci captioner version
+          docker run --rm --network none captioner:ci python -c "from captioner.tts.speak import synthesize; s = synthesize('A dog runs.', engine='piper'); assert s.audio[:4] == b'RIFF'; print('local speech ok', len(s.audio))"
           docker run -d --name app -p 8501:8501 --read-only --tmpfs /tmp \
             -v captioner-cache:/home/app/.cache captioner:ci
           for i in $(seq 1 30); do curl -fsS localhost:8501/_stcore/health && break; sleep 2; done
