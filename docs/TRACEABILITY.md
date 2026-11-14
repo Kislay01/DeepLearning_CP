@@ -20,7 +20,7 @@ Tests are under `tests/unit/` (u), `tests/integration/` (i, marker `integration`
 | FR-11 model card with each release | Should | `inference/release.py` | u `test_export_roundtrip_identical_predictions`; i `test_full_cli_pipeline` |
 | FR-12 encoder fine-tuning (layer4) | Could | `models/encoder.py`, `training/train.py`, `configs/attention_finetune.yaml` | u `test_encoder_layer4_finetune_unfreezes_only_layer4`, `test_init_from_and_optimizer_groups`; i `test_finetune_stage_runs_from_images` |
 | FR-13 Flickr30k / COCO config | Could | `data/karpathy.py`, `data/sources.py`, `data/download.py` (`download_karpathy`, `download_tofu`), `configs/coco_*.yaml`, `configs/combined_attention.yaml` | u `test_download_and_manifest`, `test_tofu_ledger_rejects_changed_archive`, `test_combined_sources_and_errors`; i `test_coco_style_end_to_end` |
-| FR-14 Transformer decoder (M3) | Won't | not implemented (stretch) | — |
+| FR-14 Transformer decoder (M3) | Won't → done | `models/transformer.py`, `configs/coco_clip_transformer.yaml` | u `test_protocol_shapes_and_alphas`, `test_padding_invariance_and_step_consistency`, `test_gradients_and_decoding`; i `test_overfit_one_batch[transformer]`, `test_transformer_end_to_end` |
 
 ## Non-functional requirements (prd.md §6)
 
@@ -60,3 +60,7 @@ Tests are under `tests/unit/` (u), `tests/integration/` (i, marker `integration`
 | ADR-022 repetition blocking, OOD detection, calibrated confidence | `inference/decode.py`, `inference/reliability.py`, `evaluation/calibrate.py`, `app/components.py` | u `test_regression_ngram_and_word_repeats_blocked`, `test_batched_beam_with_policy_equals_single`, `test_kmeans_and_fit_thresholds`, `test_training_calibrates_and_predictor_flags_unfamiliar_photos`, `test_spoken_text_hedges_unreliable_captions`; i reliability block in `test_regression_D1_evaluation_reports`, `test_decoding_ablation_gets_its_own_report` |
 | ADR-023 COCO / Flickr30k data | see FR-13 | see FR-13 |
 | ADR-024 CLIP encoder | `models/encoder.py`, `data/transforms.py` (profiles), `inference/heatmap.py` | u `test_clip_encoder_tokens_and_frozen`, `test_clip_preprocessing_profile`, `test_config_rejects_mismatched_encoder_dim`, `test_build_encoder_choices`; i `test_clip_end_to_end` |
+| ADR-025 training recipe (CIDEr-D selection, label smoothing, AdamW, cosine, EMA) | `evaluation/cider.py`, `training/optim.py`, `training/train.py` | u `test_cider_matches_pycocoevalcap_on_same_tokens`, `test_label_smoothing`, `test_adamw_groups_exclude_bias_norm_embedding`, `test_cosine_schedule_with_warmup`, `test_plateau_schedule_warmup_then_reduce`, `test_ema_tracks_average`, `test_select_by_cider_and_scst_run` |
+| ADR-026 SCST | `training/scst.py`, `configs/coco_clip_scst.yaml` | u `test_leave_one_out_baseline`, `test_scst_learns_to_maximise_cider`, `test_select_by_cider_and_scst_run` |
+| ADR-027 Transformer decoder | see FR-14 | see FR-14 |
+| ADR-028 CLIPScore / RefCLIPScore | `evaluation/clipscore.py`, `evaluation/evaluate.py` | u `test_formulas`, `test_scorer_with_random_weights`, `test_evaluation_reports_clipscore` |

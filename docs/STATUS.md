@@ -25,6 +25,10 @@ Last updated: post-blueprint improvements (ADR-020–024), 2026-11-14.
 | `feat/datasets` | done | MS-COCO / Flickr30k / combined via Karpathy splits, per-dataset paths, trust-on-first-use checksums for COCO (ADR-023, FR-13) |
 | `feat/clip-encoder` | done | CLIP ViT-B/32 patch-token encoder, per-encoder preprocessing; `configs/coco_clip.yaml` is the recommended model (ADR-024) |
 
+| `feat/cider-training` | done | CIDEr-D selection, label smoothing, AdamW, cosine warmup, EMA; SCST stage (ADR-025, ADR-026) |
+| `feat/transformer-decoder` | done | M3 Transformer decoder, FR-14 (ADR-027) |
+| `feat/clipscore` | done | CLIP-S / RefCLIP-S evaluation (ADR-028) |
+
 All of these are implemented and tested on CPU with mini fixtures. Their effect on caption quality
 and bias is **not yet measured**: that needs the GPU runs listed below.
 
@@ -35,13 +39,13 @@ and bias is **not yet measured**: that needs the GPU runs listed below.
 | Full feature extraction (FR-4 on 8,091 images) | Sandbox cannot reach `download.pytorch.org` (ResNet-50 IMAGENET1K_V2 weights) | Any machine with internet: `make features` |
 | Training M1/M2 on full data, NFR-3 timing | No GPU in the sandbox | `notebooks/colab_train.ipynb` on a T4, or `make train CONFIG=…` |
 | COCO download, features and the recommended `coco_clip` model | Sandbox can't reach `images.cocodataset.org`, the Karpathy split host, or the open_clip/HF weight hosts | `notebooks/colab_train.ipynb` with `CONFIG=configs/coco_clip.yaml` |
-| Test-set metrics (E1–E8, A1–A3), fairness and reliability tables, sample outputs | Depend on the items above | `make eval`, then copy numbers from `reports/<run>/metrics.json` into `README.md` / `reports/README.md` |
+| Test-set metrics (E1–E11, A1–A3), fairness and reliability tables, sample outputs | Depend on the items above | `make eval`, then copy numbers from `reports/<run>/metrics.json` into `README.md` / `reports/README.md` |
 | Published model release (`configs/release.yaml` `base_url`/`files`) | No trained model exists yet | `make export`, upload `artifacts/release/0.1.0/*`, paste `release.yaml` |
 | Manual accessibility checks (below) | Need a person with a browser and screen reader | Run `make app` and tick the items |
 
 ## Test summary
 
-- 215 tests (unit, app and integration), all passing locally and in CI. Integration covers the Flickr8k, COCO-format and CLIP pipelines and real Piper speech.
+- 233 tests (unit, app and integration), all passing locally and in CI. Integration covers the Flickr8k, COCO-format, CLIP and Transformer pipelines, SCST, and real Piper speech.
 - Coverage on `src/captioner`: 98 % for the full suite, 92 % unit-only; the CI gate is 80 %.
 - D1–D12 each have a passing `test_regression_D*` test; see `docs/TRACEABILITY.md`.
 
