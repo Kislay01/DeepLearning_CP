@@ -34,6 +34,7 @@ class CaptionTable:
         captions: Encoded, padded captions ``(N, K, max_len)`` int64.
         lengths: Encoded lengths incl. ``<start>``/``<end>``, ``(N, K)``.
         references: Raw reference captions per image (used for scoring).
+        file_names: Image path per entry, relative to the dataset's image root.
     """
 
     image_ids: tuple[str, ...]
@@ -41,6 +42,7 @@ class CaptionTable:
     captions: np.ndarray
     lengths: np.ndarray
     references: tuple[tuple[str, ...], ...]
+    file_names: tuple[str, ...] = ()
 
     def __len__(self) -> int:
         return len(self.image_ids)
@@ -52,7 +54,7 @@ def build_caption_table(df: pd.DataFrame, split: str, vocab: Vocabulary) -> Capt
     if rows.empty:
         raise ValueError(f"No rows for split {split!r}")
     groups = rows.groupby("image_id", sort=True)
-    image_ids, feat_idx, caps, lens, refs = [], [], [], [], []
+    image_ids, feat_idx, caps, lens, refs, files = [], [], [], [], [], []
     for image_id, g in groups:
         tokens = [vocab.prepare_tokens(tokenize(str(c))) for c in g["caption_clean"]]
         image_ids.append(str(image_id))
@@ -60,12 +62,14 @@ def build_caption_table(df: pd.DataFrame, split: str, vocab: Vocabulary) -> Capt
         caps.append([vocab.encode(t) for t in tokens])
         lens.append([min(len(t) + 2, vocab.max_len) for t in tokens])
         refs.append(tuple(str(c) for c in g["caption_raw"]))
+        files.append(str(g["file_name"].iloc[0]))
     return CaptionTable(
         image_ids=tuple(image_ids),
         feature_idx=np.asarray(feat_idx, dtype=np.int64),
         captions=np.asarray(caps, dtype=np.int64),
         lengths=np.asarray(lens, dtype=np.int64),
         references=tuple(refs),
+        file_names=tuple(files),
     )
 
 
@@ -171,7 +175,7 @@ class ImageCaptionDataset(Dataset[tuple[torch.Tensor, torch.Tensor, int, int]]):
             img, cap = i, int(torch.randint(self.n_caps, (1,)).item())
         else:
             img, cap = divmod(i, self.n_caps)
-        image = load_image(self.image_dir / f"{self.table.image_ids[img]}.jpg", self.transform)
+        image = load_image(self.image_dir / self.table.file_names[img], self.transform)
         ids = torch.from_numpy(self.table.captions[img, cap])
         return image, ids, int(self.table.lengths[img, cap]), img
 
@@ -187,7 +191,7 @@ class ImageTableDataset(Dataset[tuple[torch.Tensor, int]]):
         return len(self.table)
 
     def __getitem__(self, i: int) -> tuple[torch.Tensor, int]:
-        return load_image(self.image_dir / f"{self.table.image_ids[i]}.jpg"), i
+        return load_image(self.image_dir / self.table.file_names[i]), i
 
 
 @dataclass(frozen=True)

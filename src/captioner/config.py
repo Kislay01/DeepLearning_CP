@@ -45,9 +45,31 @@ class PathsConfig(_Strict):
         return self.artifacts_dir / "runs"
 
 
+class ArchiveConfig(_Strict):
+    """One downloadable archive. ``md5: null`` = not pinned upstream: the MD5 seen on first
+    download is recorded and enforced afterwards (trust on first use, ADR-023)."""
+
+    url: str
+    md5: str | None = None
+    dest: str = ""  # sub-folder of data/raw to extract into
+
+
+class KarpathySource(_Strict):
+    """A dataset described by a Karpathy split JSON (``dataset_coco.json`` …)."""
+
+    name: Literal["coco", "flickr30k", "flickr8k"]
+    json_file: str  # file inside the caption_datasets archive
+    image_root: str  # folder (relative to data/raw, or absolute) holding the ``filepath`` dirs
+    archives: list[ArchiveConfig] = Field(default_factory=list)
+
+
 class DatasetConfig(_Strict):
     name: str = "flickr8k"
+    kind: Literal["flickr8k", "karpathy"] = "flickr8k"
     split_source: Literal["official", "karpathy"] = "official"
+    karpathy_url: str = "https://cs.stanford.edu/people/karpathy/deepimagesent/caption_datasets.zip"
+    karpathy_md5: str = "4fa8c08369d22fe16e41dc124bd1adc2"
+    sources: list[KarpathySource] = Field(default_factory=list)
     images_url: str
     images_md5: str
     images_bytes: int
@@ -131,6 +153,7 @@ class EvalConfig(_Strict):
     n_best_worst: int = 10
     n_attention: int = 10
     n_taxonomy: int = 100
+    source: str | None = None  # evaluate only one source of a combined dataset (ADR-023)
     reliability_centroids: int = Field(64, ge=1)  # ADR-022
     ood_quantile: float = Field(0.99, gt=0.0, lt=1.0)
     confidence_quantile: float = Field(0.10, gt=0.0, lt=1.0)
@@ -177,10 +200,28 @@ class Config(_Strict):
     tts: TTSConfig = Field(default_factory=TTSConfig)
 
     @property
+    def _dataset_tag(self) -> str:
+        return "" if self.dataset.name == "flickr8k" else self.dataset.name
+
+    @property
+    def manifest_file(self) -> Path:
+        """``data/processed/manifest.parquet`` (Flickr8k) or ``data/processed/<dataset>/…``."""
+        tag = self._dataset_tag
+        base = self.paths.processed_dir / tag if tag else self.paths.processed_dir
+        return base / "manifest.parquet"
+
+    @property
+    def features_dir(self) -> Path:
+        tag = self._dataset_tag
+        return self.paths.features_dir / tag if tag else self.paths.features_dir
+
+    @property
     def vocab_file(self) -> Path:
-        """``artifacts/vocab.json`` (or ``vocab_<variant>.json`` for non-default pipelines)."""
-        variant = self.vocab.variant
-        return self.paths.artifacts_dir / (f"vocab_{variant}.json" if variant else "vocab.json")
+        """``artifacts/vocab.json`` or ``vocab_<dataset>_<variant>.json`` for other pipelines."""
+        parts = [p for p in (self._dataset_tag, self.vocab.variant) if p]
+        return self.paths.artifacts_dir / (
+            f"vocab_{'_'.join(parts)}.json" if parts else "vocab.json"
+        )
 
     def with_overrides(self, overrides: dict[str, Any]) -> Config:
         """Return a copy with a nested ``overrides`` dict deep-merged in."""

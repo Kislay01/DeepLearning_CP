@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import shutil
 import urllib.request
@@ -144,3 +145,68 @@ def download_flickr8k(cfg: Config) -> RawLayout:
         marker.write_text(md5, encoding="utf-8")
         logger.info("Extracted %d files from %s", n, zip_path.name)
     return layout
+
+
+def download_tofu(
+    url: str, dest: Path, md5: str | None, ledger: Path, timeout: float = 60.0
+) -> Path:
+    """Download with a pinned MD5, or — when upstream publishes none — trust on first use.
+
+    Without ``md5`` the hash of the first download is written to ``ledger`` (JSON) and every
+    later run must match it, so a changed or corrupted archive is still rejected (ADR-023).
+    """
+    if md5 is not None:
+        return download_file(url, dest, md5, timeout)
+    known: dict[str, str] = (
+        json.loads(ledger.read_text(encoding="utf-8")) if ledger.exists() else {}
+    )
+    if dest.name in known:
+        return download_file(url, dest, known[dest.name], timeout)
+    if not dest.exists():
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        part = dest.with_name(dest.name + ".part")
+        logger.info("Downloading %s (no published checksum: recording it)", url)
+        with urllib.request.urlopen(url, timeout=timeout) as resp, part.open("wb") as out:
+            shutil.copyfileobj(resp, out, _CHUNK)
+        part.replace(dest)
+    known[dest.name] = file_digest(dest, "md5")
+    ledger.parent.mkdir(parents=True, exist_ok=True)
+    ledger.write_text(json.dumps(known, indent=2) + "\n", encoding="utf-8")
+    logger.warning(
+        "Recorded MD5 %s for %s in %s; pin it in the config", known[dest.name], dest.name, ledger
+    )
+    return dest
+
+
+def _extract_once(archive: Path, dest: Path, raw: Path) -> None:
+    md5 = file_digest(archive, "md5")
+    marker = raw / f".{archive.stem}.extracted"
+    if marker.exists() and marker.read_text(encoding="utf-8").strip() == md5:
+        return
+    n = safe_extract(archive, dest)
+    marker.write_text(md5, encoding="utf-8")
+    logger.info("Extracted %d files from %s", n, archive.name)
+
+
+def download_karpathy(cfg: Config) -> Path:
+    """Download the Karpathy split files (MD5-pinned) and every source's image archives."""
+    raw = cfg.paths.raw_dir
+    ds = cfg.dataset
+    ledger = raw / "checksums.json"
+    split_zip = download_file(
+        ds.karpathy_url, raw / "archives" / "caption_datasets.zip", ds.karpathy_md5
+    )
+    _extract_once(split_zip, raw / "karpathy", raw)
+    for src in ds.sources:
+        for arc in src.archives:
+            name = arc.url.rsplit("/", 1)[-1]
+            archive = download_tofu(arc.url, raw / "archives" / name, arc.md5, ledger)
+            _extract_once(archive, raw / (arc.dest or src.name), raw)
+    return raw
+
+
+def download_dataset(cfg: Config) -> Path:
+    """Download whatever ``cfg.dataset`` describes; returns the folder holding the images."""
+    if cfg.dataset.kind == "flickr8k":
+        return download_flickr8k(cfg).image_dir
+    return download_karpathy(cfg)
