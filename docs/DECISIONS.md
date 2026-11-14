@@ -69,3 +69,15 @@ Format: context → decision → consequence. Numbered in the order they were ta
 - **Context:** `architecture.md` §5.3 estimates ≈ 8–9 M trainable parameters for M2 with V ≈ 2.5 k. Counting the layers it specifies (E = 256, D = 512, A = 512, C = 2048, V = 2,533) gives 12,180,198. Most of the gap is the `LSTMCell` input `[E(y); z_t]`, which includes the 2,048-d context: `4·512·(256+2048)` ≈ 4.7 M weights alone.
 - **Decision:** keep the documented dimensions and treat the doc's count as an estimate error. `test_parameter_counts_match_architecture` asserts the exact analytic count for M2 (12,180,198) and M1 (2,416,101).
 - **Consequence:** still fits easily on a T4 (≈ 49 MB fp32 weights). Checkpoints will be ~50 MB rather than the ~35 MB guessed in `database.md` §1; the release file stays out of git either way.
+
+## ADR-012 — MLflow file store needs an explicit opt-in
+
+- **Context:** `architecture.md` §1 fixes MLflow with a local `./mlruns` store. MLflow 3.x (locked: 3.18) puts the file store in maintenance mode and raises unless `MLFLOW_ALLOW_FILE_STORE=true`. The SQLite backend it recommends needs SQLAlchemy/Alembic, which `mlflow-skinny` doesn't ship (ADR-008).
+- **Decision:** `captioner.training.tracking` sets `MLFLOW_ALLOW_FILE_STORE=true` (and silences the agent hint) with `os.environ.setdefault` before importing MLflow, so users can still override both.
+- **Consequence:** runs land in `./mlruns` as documented. Browse them with `uvx mlflow ui --backend-store-uri mlruns` (with `MLFLOW_ALLOW_FILE_STORE=true`).
+
+## ADR-013 — Overfit-one-batch test setup
+
+- **Context:** `testing.md` §3.2 fixes the criterion (8 images, loss < 0.5 within 300 steps, exact greedy reproduction) but not the model size. CI has no pretrained weights (ADR-009), so cached fixture features come from a random-init ResNet-50; they are ~40× larger in magnitude than ImageNet features and very similar across images. Measured: with `decoder_dim=128` M2 crosses CE < 0.5 at step 216–280 for 3 of 4 seeds and misses for 1; with `embed_dim=128, decoder_dim=256` it crosses at step 118–131 on every seed tried.
+- **Decision:** the test rescales the batch features to unit standard deviation and uses `embed_dim=128, decoder_dim=256, attention_dim=64, dropout=0` with the full regulariser (λ = 1). Training continues after the 0.5 threshold (up to 300 steps) before checking exact greedy reproduction. Fixture features are extracted under a fixed seed so the test is deterministic.
+- **Consequence:** the test is a stable bug detector. Production hyper-parameters are unaffected.
