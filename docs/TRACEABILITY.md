@@ -19,7 +19,7 @@ Tests are under `tests/unit/` (u), `tests/integration/` (i, marker `integration`
 | FR-10 per-word attention heat-map (M2) | Should | `inference/heatmap.py`, `inference/service.py`, `evaluation/report.py` | u `test_heatmap_helpers`, `test_build_heatmaps`; a `test_heatmaps_and_about_present`; i `test_regression_D1_evaluation_reports` (attention maps in samples.html) |
 | FR-11 model card with each release | Should | `inference/release.py` | u `test_export_roundtrip_identical_predictions`; i `test_full_cli_pipeline` |
 | FR-12 encoder fine-tuning (layer4) | Could | `models/encoder.py`, `training/train.py`, `configs/attention_finetune.yaml` | u `test_encoder_layer4_finetune_unfreezes_only_layer4`, `test_init_from_and_optimizer_groups`; i `test_finetune_stage_runs_from_images` |
-| FR-13 Flickr30k / COCO config | Could | not implemented (stretch) | — |
+| FR-13 Flickr30k / COCO config | Could | `data/karpathy.py`, `data/sources.py`, `data/download.py` (`download_karpathy`, `download_tofu`), `configs/coco_*.yaml`, `configs/combined_attention.yaml` | u `test_download_and_manifest`, `test_tofu_ledger_rejects_changed_archive`, `test_combined_sources_and_errors`; i `test_coco_style_end_to_end` |
 | FR-14 Transformer decoder (M3) | Won't | not implemented (stretch) | — |
 
 ## Non-functional requirements (prd.md §6)
@@ -50,3 +50,13 @@ Tests are under `tests/unit/` (u), `tests/integration/` (i, marker `integration`
 | D10 model reloaded per click | `st.cache_resource` | `test_regression_D10_predictor_loaded_once` |
 | D11 pickles + committed data | JSON/HDF5/safetensors, large-file hook | `test_regression_D11_no_pickle_in_source` |
 | D12 non-reproducible setup | uv.lock, env paths, modern APIs | `test_regression_D12_reproducible_and_portable` |
+
+## Post-blueprint improvements (docs/DECISIONS.md ADR-020–024)
+
+| Improvement | Module(s) | Tests |
+|---|---|---|
+| ADR-020 local private speech (Piper) | `tts/speak.py`, `app/`, `Dockerfile` | u `test_ensure_voice_downloads_and_verifies`, `test_ensure_voice_rejects_tampered_archive`, `test_piper_engine_with_stub_voice`, `test_tts_failures_raise_tts_error`; i `test_real_piper_voice_speaks_locally`; CI docker `--network none` speech check |
+| ADR-021 gender-neutral captions + bias metrics | `data/neutral.py`, `data/vocab.py`, `data/prepare.py`, `inference/predictor.py`, `evaluation/fairness.py` | u `test_neutralize_text`, `test_aligned_rewrite_keeps_length`, `test_gender_metrics`, `test_neutral_vocab_variant`, `test_served_captions_are_gender_neutral`; i `test_regression_D1_evaluation_reports` (fairness keys) |
+| ADR-022 repetition blocking, OOD detection, calibrated confidence | `inference/decode.py`, `inference/reliability.py`, `evaluation/calibrate.py`, `app/components.py` | u `test_regression_ngram_and_word_repeats_blocked`, `test_batched_beam_with_policy_equals_single`, `test_kmeans_and_fit_thresholds`, `test_training_calibrates_and_predictor_flags_unfamiliar_photos`, `test_spoken_text_hedges_unreliable_captions`; i reliability block in `test_regression_D1_evaluation_reports`, `test_decoding_ablation_gets_its_own_report` |
+| ADR-023 COCO / Flickr30k data | see FR-13 | see FR-13 |
+| ADR-024 CLIP encoder | `models/encoder.py`, `data/transforms.py` (profiles), `inference/heatmap.py` | u `test_clip_encoder_tokens_and_frozen`, `test_clip_preprocessing_profile`, `test_config_rejects_mismatched_encoder_dim`, `test_build_encoder_choices`; i `test_clip_end_to_end` |

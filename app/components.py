@@ -18,10 +18,23 @@ from captioner.inference.service import Heatmaps
 ALLOWED_TYPES = ["jpg", "jpeg", "png", "webp"]
 UPLOAD_LABEL = "Choose a photo (JPG, PNG or WebP, up to 10 MB)"
 AUDIO_UNAVAILABLE = "Audio unavailable, caption shown above."
-LIMITATIONS = (
-    "Trained on 8,000 Flickr photos of people and animals. It may misidentify objects, "
-    "and it can guess gender or age wrongly. Not for safety-critical use."
-)
+TRAINING_DATA = {
+    "flickr8k": "8,000 Flickr photos, mostly of people and animals",
+    "coco": "about 120,000 everyday photos from MS-COCO (80 kinds of objects)",
+    "combined": "about 160,000 photos from MS-COCO, Flickr30k and Flickr8k",
+}
+
+
+def limitations(dataset: str) -> str:
+    seen = TRAINING_DATA.get(dataset, f"the {dataset} dataset")
+    return (
+        f"The model learned from {seen}. It can still misidentify objects, colours or counts, "
+        "especially in photos unlike its training data; it tells you when a photo looks "
+        "unfamiliar or when it is unsure. People are described without guessing gender. "
+        "Not for safety-critical use."
+    )
+
+
 PRIVACY = (
     "Your photo is processed in memory on this server and is never stored or sent anywhere. "
     "Speech is generated on this server too, so nothing leaves it."
@@ -115,11 +128,11 @@ def heatmap_grid(heatmaps: Heatmaps | None) -> None:
         )
 
 
-def about(online_speech: bool = False) -> None:
+def about(online_speech: bool = False, dataset: str = "flickr8k") -> None:
     with st.expander("About & limitations"):
-        st.write(LIMITATIONS)
+        st.write(limitations(dataset))
         st.write(PRIVACY + (PRIVACY_ONLINE if online_speech else ""))
         st.caption(
-            "Model: ResNet-50 encoder + LSTM decoder with soft attention. Data: Flickr8k "
-            "(Hodosh, Young & Hockenmaier, 2013), non-commercial research and education use only."
+            "Model: CNN/CLIP image encoder + LSTM decoder with soft attention. Training images are "
+            "licensed for non-commercial research and education only. Speech: Piper (local)."
         )

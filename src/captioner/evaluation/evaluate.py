@@ -65,10 +65,12 @@ def _model_and_data(
     return run.model, ImageFeatureDataset(table, open_feature_store(path, table))
 
 
-def _words(hyps: list[Hypothesis], run: LoadedRun) -> tuple[list[list[str]], list[str]]:
+def _words(
+    hyps: list[Hypothesis], run: LoadedRun, neutral_output: bool
+) -> tuple[list[list[str]], list[str]]:
     """Raw decoded words (what the model learned) and the served text (after ADR-021 rewrite)."""
     raw = [run.vocab.decode(h.ids) for h in hyps]
-    served = [neutralize_aligned(w) if run.cfg.decode.gender_neutral_output else w for w in raw]
+    served = [neutralize_aligned(w) if neutral_output else w for w in raw]
     return raw, [" ".join(w) for w in served]
 
 
@@ -132,23 +134,20 @@ def evaluate_run(
     model = model.to(device).eval()
     loader = DataLoader(ds, batch_size=cfg.train.batch_size, collate_fn=collate_images)
     refs = [list(r) for r in table.references]
-    neutral_eval = (
-        run.vocab.text_transform == "gender_neutral" or run.cfg.decode.gender_neutral_output
-    )
+    neutral_eval = run.vocab.text_transform == "gender_neutral" or cfg.decode.gender_neutral_output
     score_refs = _neutral_refs(refs) if neutral_eval else refs
-    report_dir = cfg.paths.reports_dir / (
-        f"{run_dir.name}-{cfg.eval.source}" if cfg.eval.source else run_dir.name
-    )
+    suffix = "".join(f"-{s}" for s in (cfg.eval.source, cfg.eval.tag) if s)
+    report_dir = cfg.paths.reports_dir / f"{run_dir.name}{suffix}"
     results: dict[str, Any] = {}
     rows: list[dict[str, Any]] = []
     main_beam = cfg.decode.beam if cfg.decode.beam in beams else beams[-1]
     main: tuple[list[Hypothesis], list[str], CocoResult] | None = None
-    d = run.cfg.decode
+    d = cfg.decode  # decoding is an inference-time choice: taken from the current config
     repeat = build_repeat_policy(run.vocab.itos, d.no_repeat_ngram, d.block_repeated_words)
     for beam in beams:
-        dec = beam_decoder(beam, run.cfg.decode.max_len, run.cfg.decode.length_alpha, repeat)
+        dec = beam_decoder(beam, d.max_len, d.length_alpha, repeat)
         hyps = decode_split(model, loader, device, dec)
-        raw_words, texts = _words(hyps, run)
+        raw_words, texts = _words(hyps, run, d.gender_neutral_output)
         res = coco_scores(texts, score_refs)
         raw_ref_scores = coco_scores(texts, refs).corpus if neutral_eval else res.corpus
         n_tax = min(cfg.eval.n_taxonomy, len(texts))

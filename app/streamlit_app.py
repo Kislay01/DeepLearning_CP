@@ -143,7 +143,10 @@ def main() -> None:
         if predictor is not None and predictor.has_attention:
             ui.heatmap_grid(result.heatmaps)
     _render_options(predictor)
-    ui.about(online_speech=predictor is not None and predictor.cfg.tts.allow_online)
+    ui.about(
+        online_speech=predictor is not None and predictor.cfg.tts.allow_online,
+        dataset=predictor.cfg.dataset.name if predictor else "flickr8k",
+    )
 
 
 main()
