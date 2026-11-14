@@ -163,3 +163,20 @@ these ADRs win.
 - **Context:** ImageNet-trained ResNet-50 features cover 1,000 object classes and photos similar to ImageNet. Out-of-domain photos (screenshots, artwork, food close-ups, signage) get unreliable features. CLIP image towers, trained on web-scale image–text pairs, transfer far better and are the usual backbone of modern captioners.
 - **Decision:** `encoder.name: clip_vit_b32` (open_clip `ViT-B-32`, default weights `openai`) returns its 7×7 patch tokens `(B, 49, 768)`, so the attention decoder, heat-maps (7×7) and every other stage are unchanged. Each encoder has a `PreprocessProfile` (CLIP: bicubic resize 224, CLIP mean/std). The one `load_image` function is still shared by extraction and serving; only the profile differs. Config validation rejects an `encoder_dim` that doesn't match the encoder. `configs/coco_clip.yaml` (COCO + CLIP + neutral captions) is the **recommended model**. Its features are 2.7× smaller than ResNet-50 spatial features, which makes caching COCO practical. Fine-tuning stays ResNet-only.
 - **Consequence:** the decoder now has a 768-d input (fewer parameters). The weights download from the open_clip hub on first use; this sandbox can't reach it, so CI tests run CLIP with random weights.
+
+## ADR-025 — Modern training recipe (selection on CIDEr-D, label smoothing, AdamW, cosine, EMA)
+
+- **Context:** the blueprint recipe (Adam, plateau schedule, early stopping on NLTK BLEU-4) is a reasonable 2016 baseline. BLEU-4 correlates poorly with human judgements of captions; CIDEr-D, which weights informative n-grams by their rarity, is the metric captioning papers select and report on.
+- **Decision:** new, opt-in `train.*` keys; the defaults reproduce the blueprint exactly.
+  - `select_metric: cider`: early stopping, LR plateau and `best.pt` use validation **CIDEr-D**. `captioner.evaluation.cider.CiderD` is a corpus-reusable implementation that matches `pycocoevalcap` to 1e-12 on the golden set. Validation always logs both BLEU-4 and CIDEr.
+  - `label_smoothing` (0.1 in recommended configs) reduces over-confident, generic captions.
+  - `optimizer: adamw` with decoupled weight decay, excluding biases, norms and embeddings.
+  - `scheduler: cosine` with linear `warmup_steps`, stepped per batch. Warmup also works with the plateau schedule.
+  - `ema_decay`: an exponential moving average of the weights is what gets validated, checkpointed and exported. It is usually a free gain of a few CIDEr points.
+- **Consequence:** `configs/coco_attention.yaml` and `coco_clip.yaml` use the full recipe, and `attention_neutral.yaml` uses CIDEr selection, label smoothing and EMA. The blueprint configs are unchanged, so E1–E5 stay comparable to the PRD.
+
+## ADR-026 — Self-critical sequence training (SCST) as a second stage
+
+- **Context:** cross-entropy training suffers from exposure bias (it never conditions on its own mistakes) and optimises token likelihood, not caption quality. SCST (Rennie et al., 2017) directly optimises the evaluation metric and is the largest single documented gain for captioners (typically +10–20 % CIDEr).
+- **Decision:** `train.objective: scst` samples `scst_samples` captions per image (specials blocked). Each gets a CIDEr-D reward against the training references; document frequencies come from the training corpus, and reference vectors are cached. The baseline is the mean reward of the image's other samples (Luo, 2020), so no greedy pass is needed. The loss is `−(r − b)·log p` averaged over sampled tokens. The same loop, validation, early stopping and checkpointing are reused. `configs/coco_clip_scst.yaml` fine-tunes the XE model at LR 2e-5 via `train.init_from`.
+- **Consequence:** `test_scst_learns_to_maximise_cider` shows the optimiser driving a learnable model toward the reference wording, and an SCST run on the mini data completes end to end. The real gain must be measured on COCO (E9 in `reports/README.md`).
