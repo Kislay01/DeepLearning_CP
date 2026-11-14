@@ -148,7 +148,7 @@ def test_parameter_counts_match_architecture() -> None:
         + (d * vocab + vocab)  # output layer
     )
     assert count_trainable(m2) == expected
-    assert 12.0e6 < expected < 12.5e6
+    assert expected == 12_180_198
     m1 = MergeModel(ModelConfig(kind="merge", decoder_dim=256), vocab)
     m1_expected = (
         (c * 256 + 256)  # image projection
