@@ -15,6 +15,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     MPLCONFIGDIR=/tmp/matplotlib \
     CAPTIONER_DEVICE=cpu \
     CAPTIONER_CACHE_DIR=/home/app/.cache/captioner \
+    CAPTIONER_VOICE_DIR=/opt/voices \
     PORT=8501
 
 RUN apt-get update \
@@ -42,7 +43,8 @@ COPY app ./app
 COPY .streamlit ./.streamlit
 RUN pip install --no-deps . \
  && python -c "from torchvision.models import ResNet50_Weights, resnet50; resnet50(weights=ResNet50_Weights.IMAGENET1K_V2)" \
- && chmod -R a+rX /opt/torch
+ && python -c "from captioner.config import TTSConfig; from captioner.tts.speak import ensure_voice; ensure_voice(TTSConfig())" \
+ && chmod -R a+rX /opt/torch /opt/voices
 
 RUN useradd --create-home --uid 10001 app \
  && mkdir -p /home/app/.cache/captioner \

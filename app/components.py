@@ -24,7 +24,10 @@ LIMITATIONS = (
 )
 PRIVACY = (
     "Your photo is processed in memory on this server and is never stored or sent anywhere. "
-    "When online speech is on, only the caption text is sent to Google's text-to-speech "
+    "Speech is generated on this server too, so nothing leaves it."
+)
+PRIVACY_ONLINE = (
+    " If you pick the online voice, only the caption text is sent to Google's text-to-speech "
     "service to create the audio."
 )
 _MD_SPECIAL = re.compile(r"([\\`*_{}\[\]()#+\-.!|>~<])")
@@ -96,10 +99,10 @@ def heatmap_grid(heatmaps: Heatmaps | None) -> None:
         )
 
 
-def about() -> None:
+def about(online_speech: bool = False) -> None:
     with st.expander("About & limitations"):
         st.write(LIMITATIONS)
-        st.write(PRIVACY)
+        st.write(PRIVACY + (PRIVACY_ONLINE if online_speech else ""))
         st.caption(
             "Model: ResNet-50 encoder + LSTM decoder with soft attention. Data: Flickr8k "
             "(Hodosh, Young & Hockenmaier, 2013), non-commercial research and education use only."

@@ -91,3 +91,16 @@ app:
   cooldown_s: 2.0
   low_confidence_logprob: -1.2
   max_heatmap_words: 12
+
+# Speech (ADR-020): local neural voice (Piper) by default — the caption never leaves the server.
+# "offline" = eSpeak via pyttsx3 (optional extra); "gtts" sends the caption text to Google and is
+# only offered when allow_online is true.
+tts:
+  engine: piper
+  allow_online: false
+  voice_url: https://github.com/rhasspy/piper/releases/download/v0.0.2/voice-en-us-lessac-medium.tar.gz
+  voice_sha256: d45ca50084c0558eb9581cd7d26938043bc8853513da47c63b94d95a2367a5c9
+  model_file: en-us-lessac-medium.onnx
+  model_sha256: fa5998eb236e4291f7920d88b897225d0f2ce90ff6193480fbaa279d7814f347
+  config_file: en-us-lessac-medium.onnx.json
+  config_sha256: f3e0b906861cc2fb8a50e12ceca263afe226ff9688f60e9d4ef943d4f047a513

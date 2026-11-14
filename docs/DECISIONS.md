@@ -117,3 +117,17 @@ Format: context → decision → consequence. Numbered in the order they were ta
 - **Context:** ADR-001 locks PyPI torch, which pulls about 3 GB of CUDA libraries. The serving image is CPU-only (architecture.md §10).
 - **Decision:** the Dockerfile exports `uv.lock` to requirements, installs the **same** `torch`/`torchvision` versions from the official CPU index (`download.pytorch.org/whl/cpu`), installs the rest of the locked requirements, and pre-downloads the IMAGENET1K_V2 weights into `TORCH_HOME` at build time so the container runs with a read-only filesystem. It runs as uid 10001 with a health check. CI builds the image, checks the uid, and probes `/_stcore/health` with `--read-only`.
 - **Consequence:** small CPU image with no runtime downloads apart from the pinned model release, which is SHA-256-verified.
+
+---
+
+# Post-blueprint improvements
+
+ADR-020 onward go beyond the original seven documents to remove the limitations listed after the
+first release. Where they differ from `security.md`, `architecture.md` or `design_system.md`,
+these ADRs win.
+
+## ADR-020 — Speech is generated locally by default (Piper neural TTS); gTTS is opt-in only
+
+- **Context:** gTTS uses Google Translate's unofficial endpoint. It can break without notice and it sends every caption to a third party, a privacy cost for the visually impaired users the demo targets. eSpeak runs locally but sounds robotic.
+- **Decision:** the default engine is **Piper** (`piper-tts`, ONNX, CPU), using the `en-US lessac medium` voice. The voice archive is pinned by URL and SHA-256, and each extracted file is pinned by SHA-256. It is downloaded once to `CAPTIONER_VOICE_DIR` or the user cache; the Docker image bakes it in at build time. Synthesis runs in-process into a `BytesIO` WAV; measured 0.19 s for a 9-word caption on the 2-core sandbox. Fallback order is Piper → eSpeak (optional extra). gTTS is reachable only when `tts.allow_online: true`, which defaults to **false**; the UI then labels it "sends caption text to Google".
+- **Consequence:** in the default configuration, no image or text leaves the server, and speech keeps working offline. CI checks this by running Piper inside the container with `--network none`. The Lessac voice dataset licence is for non-commercial use, which matches the Flickr8k restriction.
