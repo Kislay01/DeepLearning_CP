@@ -1,0 +1,69 @@
+{
+  "hypotheses": [
+    "a black dog is running through the grass",
+    "two children play on the beach",
+    "a man is riding a bike",
+    "a dog runs in the snow",
+    "a brown dog jumps in the air"
+  ],
+  "references": [
+    [
+      "A black dog is running through the grass .",
+      "A dog runs across a field.",
+      "The dog is running on green grass.",
+      "A black dog runs outside.",
+      "Dog running in a park"
+    ],
+    [
+      "Two children are playing on a beach .",
+      "Kids play in the sand.",
+      "Two young kids at the beach.",
+      "Children playing near the ocean.",
+      "Two kids play on the shore"
+    ],
+    [
+      "A man rides a bicycle down the street .",
+      "A cyclist on a city road.",
+      "A man on a bike.",
+      "Person riding a bicycle outdoors.",
+      "A man is cycling on the road"
+    ],
+    [
+      "A woman in a red coat walks in the snow .",
+      "A lady walking through snow.",
+      "Woman wearing red in winter.",
+      "A person walks on a snowy path.",
+      "A woman walks in snow"
+    ],
+    [
+      "A brown dog jumps to catch a frisbee .",
+      "Dog leaping for a frisbee.",
+      "A dog catches a flying disc.",
+      "The brown dog jumps in the air.",
+      "A dog jumping"
+    ]
+  ],
+  "scores": {
+    "BLEU-1": 0.939393939365473,
+    "BLEU-2": 0.8784332766887192,
+    "BLEU-3": 0.7773308777124032,
+    "BLEU-4": 0.6961405637926633,
+    "METEOR": 0.4589664326422579,
+    "ROUGE-L": 0.7777688977688977,
+    "CIDEr": 1.9365936464654205
+  },
+  "bleu4_per_image": [
+    0.9999999997163694,
+    9.036020032446394e-05,
+    9.036020032446394e-05,
+    6.865890478059747e-05,
+    0.9999999996672622
+  ],
+  "cider_per_image": [
+    3.249585595529281,
+    1.5609075571480178,
+    1.5829544003156575,
+    0.6474210155703165,
+    2.6420996637638297
+  ]
+}
